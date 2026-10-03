@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Pattern
+from re import Pattern
 
 # Explicit pattern matchers for known secret types
 KNOWN_PATTERNS: list[tuple[str, Pattern[str]]] = [
@@ -118,7 +118,10 @@ def redact(text: str) -> str:
     def mask_kv(match: re.Match[str]) -> str:
         key_name = match.group(1)
         val = match.group(2)
-        if val.lower() in {"none", "false", "true", "null", "undefined", "changeme", "example", "xxx"}:
+        ignored_vals = {
+            "none", "false", "true", "null", "undefined", "changeme", "example", "xxx"
+        }
+        if val.lower() in ignored_vals:
             return match.group(0)
         return match.group(0).replace(val, f"[REDACTED:{key_name.upper()}]")
 
@@ -126,9 +129,8 @@ def redact(text: str) -> str:
     redacted = kv_pattern.sub(mask_kv, redacted)
 
     # 3. Bearer tokens
-    def mask_bearer(match: re.Match[str]) -> str:
-        token = match.group(1)
-        return f"Bearer [REDACTED:BEARER_TOKEN]"
+    def mask_bearer(_match: re.Match[str]) -> str:
+        return "Bearer [REDACTED:BEARER_TOKEN]"
 
     bearer_pattern = dict(KNOWN_PATTERNS)["BEARER_TOKEN"]
     redacted = bearer_pattern.sub(mask_bearer, redacted)

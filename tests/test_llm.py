@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 import respx
-import httpx
 
 from khaslana.core.config import KhaslanaConfig, LLMConfig
-from khaslana.core.errors import LLMAuthError, LLMConnectionError, LLMError
+from khaslana.core.errors import LLMConnectionError, LLMError
 from khaslana.core.llm import (
     ChatMessage,
     FakeLLM,
-    LLMResponse,
     LLMRouter,
     OllamaClient,
 )
@@ -160,7 +159,8 @@ class TestLLMRouter:
     async def test_stream_redacts_secrets(self, base_config: KhaslanaConfig) -> None:
         fake = FakeLLM(responses=["ok"])
         router = LLMRouter(base_config, custom_primary=fake)
-        async for _ in router.stream([ChatMessage(role="user", content="key=sk-proj-SECRETSECRETSECRETSECRET123456789")]):
+        secret_msg = "key=sk-proj-SECRETSECRETSECRETSECRET123456789"
+        async for _ in router.stream([ChatMessage(role="user", content=secret_msg)]):
             pass
         received = fake.call_history[0][0].content
         assert "sk-proj-" not in received

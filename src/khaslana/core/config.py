@@ -1,7 +1,8 @@
 """Configuration management for Khaslana.
 
 Precedence order:
-CLI flags > Environment variables > Project `.khaslana.toml` > User `~/.config/khaslana/config.toml` > Defaults.
+CLI flags > Environment variables > Project `.khaslana.toml`
+> User `~/.config/khaslana/config.toml` > Defaults.
 """
 
 from __future__ import annotations
@@ -10,14 +11,17 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
 import toml
+from pydantic import BaseModel, Field
 
 
 class LLMConfig(BaseModel):
     """LLM provider and connection parameters."""
 
-    provider: str = Field(default="ollama", description="Primary LLM provider (ollama, gemini, openai, fake)")
+    provider: str = Field(
+        default="ollama",
+        description="Primary LLM provider (ollama, gemini, openai, fake)",
+    )
     model: str = Field(default="llama3", description="Default model name")
     ollama_url: str = Field(default="http://localhost:11434", description="Ollama API base URL")
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")
@@ -62,7 +66,9 @@ class KhaslanaConfig(BaseModel):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     debug: bool = Field(default=False, description="Enable debug logging and tracebacks")
-    log_level: str = Field(default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)")
+    log_level: str = Field(
+        default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)"
+    )
 
 
 def get_user_config_path() -> Path:

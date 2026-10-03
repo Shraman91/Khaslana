@@ -1,7 +1,9 @@
 """Logging configuration."""
 
 import sys
+
 import structlog
+
 
 def setup_logging(level: str = "INFO", debug: bool = False) -> None:
     # Minimal structlog setup for now. Will expand as features grow.

@@ -104,7 +104,8 @@ class TestPatternRedaction:
         assert result == text  # 'none' is a known placeholder
 
     def test_bearer_token(self) -> None:
-        text = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiYWRtaW4ifQ.dummysignaturevalue"
+        token = "eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiYWRtaW4ifQ.dummysignaturevalue"
+        text = f"Authorization: Bearer {token}"
         result = redact(text)
         assert "Bearer [REDACTED" in result
 

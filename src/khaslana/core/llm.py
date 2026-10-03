@@ -8,11 +8,11 @@ from __future__ import annotations
 import asyncio
 import json
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from khaslana.core.config import KhaslanaConfig, LLMConfig
 from khaslana.core.errors import (
@@ -128,7 +128,8 @@ class OllamaClient(LLMClient):
                 hint="Is Ollama running? Start it with `ollama serve`.",
             ) from e
         except httpx.TimeoutException as e:
-            raise LLMTimeoutError(f"Ollama request timed out after {self.config.timeout_seconds}s") from e
+            msg = f"Ollama request timed out after {self.config.timeout_seconds}s"
+            raise LLMTimeoutError(msg) from e
         except httpx.HTTPStatusError as e:
             raise LLMError(f"Ollama HTTP error: {e.response.status_code} {e.response.text}") from e
 
@@ -145,17 +146,21 @@ class OllamaClient(LLMClient):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
-                async with client.stream("POST", url, json=payload) as response:
-                    if response.status_code != 200:
-                        err_body = await response.aread()
-                        raise LLMError(f"Ollama stream error {response.status_code}: {err_body.decode()}")
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        chunk = json.loads(line)
-                        if "message" in chunk and "content" in chunk["message"]:
-                            yield chunk["message"]["content"]
+            async with (
+                httpx.AsyncClient(timeout=self.config.timeout_seconds) as client,
+                client.stream("POST", url, json=payload) as response,
+            ):
+                if response.status_code != 200:
+                    err_body = await response.aread()
+                    raise LLMError(
+                        f"Ollama stream error {response.status_code}: {err_body.decode()}"
+                    )
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    chunk = json.loads(line)
+                    if "message" in chunk and "content" in chunk["message"]:
+                        yield chunk["message"]["content"]
         except httpx.ConnectError as e:
             raise LLMConnectionError(
                 f"Cannot connect to Ollama at {self.config.ollama_url}",
@@ -221,24 +226,28 @@ class OpenAIClient(LLMClient):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
-                async with client.stream("POST", url, headers=self._headers(), json=payload) as response:
-                    if response.status_code in (401, 403):
-                        raise LLMAuthError("Invalid OpenAI API key")
-                    if response.status_code != 200:
-                        err_body = await response.aread()
-                        raise LLMError(f"OpenAI error {response.status_code}: {err_body.decode()}")
-                    async for line in response.aiter_lines():
-                        line = line.strip()
-                        if not line or not line.startswith("data: "):
-                            continue
-                        data_str = line[len("data: ") :]
-                        if data_str == "[DONE]":
-                            break
-                        chunk = json.loads(data_str)
-                        delta = chunk["choices"][0].get("delta", {})
-                        if "content" in delta and delta["content"]:
-                            yield delta["content"]
+            async with (
+                httpx.AsyncClient(timeout=self.config.timeout_seconds) as client,
+                client.stream(
+                    "POST", url, headers=self._headers(), json=payload
+                ) as response,
+            ):
+                if response.status_code in (401, 403):
+                    raise LLMAuthError("Invalid OpenAI API key")
+                if response.status_code != 200:
+                    err_body = await response.aread()
+                    raise LLMError(f"OpenAI error {response.status_code}: {err_body.decode()}")
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line or not line.startswith("data: "):
+                        continue
+                    data_str = line[len("data: ") :]
+                    if data_str == "[DONE]":
+                        break
+                    chunk = json.loads(data_str)
+                    delta = chunk["choices"][0].get("delta", {})
+                    if delta.get("content"):
+                        yield delta["content"]
         except httpx.ConnectError as e:
             raise LLMConnectionError("Failed to connect to OpenAI endpoint") from e
         except httpx.TimeoutException as e:
@@ -255,10 +264,14 @@ class GeminiClient(LLMClient):
     def _get_api_key(self) -> str:
         key = self.config.gemini_api_key
         if not key:
-            raise LLMAuthError("Google Gemini API key missing. Set GEMINI_API_KEY environment variable.")
+            raise LLMAuthError(
+                "Google Gemini API key missing. Set GEMINI_API_KEY environment variable."
+            )
         return key
 
-    def _convert_messages(self, messages: list[ChatMessage]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    def _convert_messages(
+        self, messages: list[ChatMessage]
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         system_instruction = None
         contents: list[dict[str, Any]] = []
         for m in messages:
@@ -272,7 +285,8 @@ class GeminiClient(LLMClient):
     async def chat(self, messages: list[ChatMessage]) -> LLMResponse:
         api_key = self._get_api_key()
         model_name = self.config.model if "gemini" in self.config.model else "gemini-1.5-flash"
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        url = f"{base_url}/{model_name}:generateContent?key={api_key}"
 
         system_instruction, contents = self._convert_messages(messages)
         payload: dict[str, Any] = {
@@ -307,9 +321,8 @@ class GeminiClient(LLMClient):
             raise LLMTimeoutError("Gemini request timed out") from e
 
     async def stream(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
-        # For simplicity and robust fallback, fetch chat and yield tokens or simulate stream if needed
+        # For simplicity and robust fallback, fetch chat and yield tokens
         resp = await self.chat(messages)
-        # Yield in small words/tokens
         for chunk in resp.content.split(" "):
             yield chunk + " "
             await asyncio.sleep(0.01)
@@ -318,7 +331,9 @@ class GeminiClient(LLMClient):
 class FakeLLM(LLMClient):
     """Deterministic fake LLM for testing without network."""
 
-    def __init__(self, config: LLMConfig | None = None, responses: list[str] | None = None) -> None:
+    def __init__(
+        self, config: LLMConfig | None = None, responses: list[str] | None = None
+    ) -> None:
         super().__init__(config or LLMConfig(provider="fake", model="fake-model"))
         self.responses = list(responses or ["Hello! I am a fake LLM response."])
         self.call_history: list[list[ChatMessage]] = []
@@ -365,12 +380,20 @@ class LLMRouter:
             self.clients["openai"] = OpenAIClient(config.llm)
             self.clients["fake"] = FakeLLM(config.llm)
 
-    def _sanitize_messages(self, messages: list[ChatMessage | dict[str, str]]) -> list[ChatMessage]:
+    def _sanitize_messages(
+        self, messages: Sequence[ChatMessage | dict[str, Any]]
+    ) -> list[ChatMessage]:
         """Convert input messages and redact secrets."""
         safe_messages: list[ChatMessage] = []
         for m in messages:
             if isinstance(m, dict):
-                m = ChatMessage(role=m.get("role", "user"), content=m.get("content", ""))
+                r_str = str(m.get("role", "user"))
+                role: Literal["system", "user", "assistant"] = (
+                    "system"
+                    if r_str == "system"
+                    else ("assistant" if r_str == "assistant" else "user")
+                )
+                m = ChatMessage(role=role, content=str(m.get("content", "")))
             redacted_content = redact(m.content)
             safe_messages.append(ChatMessage(role=m.role, content=redacted_content))
         return safe_messages
@@ -389,7 +412,7 @@ class LLMRouter:
                 chain.append(f)
         return chain
 
-    async def chat(self, messages: list[ChatMessage | dict[str, str]]) -> LLMResponse:
+    async def chat(self, messages: Sequence[ChatMessage | dict[str, Any]]) -> LLMResponse:
         """Route chat request through primary with fallback and retries."""
         safe_msgs = self._sanitize_messages(messages)
         chain = self._get_provider_chain()
@@ -418,7 +441,9 @@ class LLMRouter:
             hint=f"Last error: {last_error}",
         )
 
-    async def stream(self, messages: list[ChatMessage | dict[str, str]]) -> AsyncGenerator[str, None]:
+    async def stream(
+        self, messages: Sequence[ChatMessage | dict[str, Any]]
+    ) -> AsyncGenerator[str, None]:
         """Route streaming chat request through primary with fallback."""
         safe_msgs = self._sanitize_messages(messages)
         chain = self._get_provider_chain()
@@ -432,7 +457,6 @@ class LLMRouter:
             try:
                 # Test connectivity by initiating stream
                 stream_gen = client.stream(safe_msgs)
-                first_chunk = None
                 async for chunk in stream_gen:
                     yield chunk
                 return

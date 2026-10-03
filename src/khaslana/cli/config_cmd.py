@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Annotated
 
+import typer
 from rich.console import Console
 from rich.syntax import Syntax
-import typer
 
-from khaslana.core.config import get_user_config_path, load_config, save_user_config_value
+from khaslana.core.config import load_config, save_user_config_value
 
 config_app = typer.Typer(name="config", help="View and update Khaslana configuration.")
 console = Console()
@@ -41,7 +40,9 @@ def config_show(
 
 @config_app.command("set")
 def config_set(
-    key: Annotated[str, typer.Argument(help="Configuration key path (e.g. llm.model, llm.provider)")],
+    key: Annotated[
+        str, typer.Argument(help="Configuration key path (e.g. llm.model, llm.provider)")
+    ],
     value: Annotated[str, typer.Argument(help="Value to set")],
 ) -> None:
     """Set a configuration value in ~/.config/khaslana/config.toml."""
@@ -59,4 +60,5 @@ def config_set(
                 parsed_val = value
 
     path = save_user_config_value(key, parsed_val)
-    console.print(f"[green]✓[/green] Saved [bold]{key}[/bold] = [cyan]{parsed_val}[/cyan] to {path}")
+    msg = f"[green]✓[/green] Saved [bold]{key}[/bold] = [cyan]{parsed_val}[/cyan] to {path}"
+    console.print(msg)

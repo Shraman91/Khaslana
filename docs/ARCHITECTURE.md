@@ -157,7 +157,7 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 | Phase | Feature                   | Status  |
 |-------|---------------------------|---------|
 | 0     | Foundation + LLM routing  | ✅ Done |
-| 1     | RAG System                | 🔲 TODO |
+| 1     | RAG System                | ✅ Done |
 | 2     | Hybrid Retrieval          | 🔲 TODO |
 | 3     | Code Intelligence         | 🔲 TODO |
 | 4     | Agent System              | 🔲 TODO |

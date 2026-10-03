@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from typing import Any
 
 import httpx
 from rich.console import Console
@@ -44,9 +43,10 @@ def check_binary_version(name: str, args: list[str]) -> tuple[bool, str]:
             timeout=5,
             check=False,
         )
-        first_line = (res.stdout or res.stderr).strip().splitlines()[0] if (res.stdout or res.stderr) else "Installed"
+        output = res.stdout or res.stderr
+        first_line = output.strip().splitlines()[0] if output else "Installed"
         return True, first_line[:50]
-    except Exception as e:
+    except Exception:
         return True, f"Installed at {path}"
 
 
@@ -80,33 +80,37 @@ async def run_doctor(config: KhaslanaConfig, console: Console) -> bool:
 
     # 1. Ollama check
     ollama_ok, ollama_det = await check_ollama(config.llm.ollama_url)
-    table.add_row("Ollama (Local)", "✅" if ollama_ok else "⚠️", ollama_det)
+    table.add_row("Ollama (Local)", "✓" if ollama_ok else "!", ollama_det)
 
     # 2. Git check
     git_ok, git_det = check_binary_version("git", ["--version"])
-    table.add_row("Git", "✅" if git_ok else "❌", git_det)
+    table.add_row("Git", "✓" if git_ok else "✗", git_det)
     if not git_ok:
         all_ok = False
 
     # 3. Docker check
     docker_ok, docker_det = check_docker()
-    table.add_row("Docker", "✅" if docker_ok else "⚠️", docker_det)
+    table.add_row("Docker", "✓" if docker_ok else "!", docker_det)
 
     # 4. Kubectl check
     k8s_ok, k8s_det = check_binary_version("kubectl", ["version", "--client"])
-    table.add_row("Kubectl", "✅" if k8s_ok else "ℹ️", k8s_det if k8s_ok else "Optional (for k8s deploy doctor)")
+    table.add_row(
+        "Kubectl",
+        "✓" if k8s_ok else "-",
+        k8s_det if k8s_ok else "Optional (for k8s deploy doctor)",
+    )
 
     # 5. Cloud API keys check
     openai_present = bool(config.llm.openai_api_key or os.getenv("OPENAI_API_KEY"))
     gemini_present = bool(config.llm.gemini_api_key or os.getenv("GEMINI_API_KEY"))
     table.add_row(
         "OpenAI Fallback",
-        "✅" if openai_present else "ℹ️",
+        "✓" if openai_present else "-",
         "Configured" if openai_present else "Not set (optional fallback)",
     )
     table.add_row(
         "Gemini Fallback",
-        "✅" if gemini_present else "ℹ️",
+        "✓" if gemini_present else "-",
         "Configured" if gemini_present else "Not set (optional fallback)",
     )
 

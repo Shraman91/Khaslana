@@ -22,7 +22,8 @@ Content:
 ```
 """
 
-COMMIT_MSG_PROMPT = """Generate a clean, conventional commit message (e.g. feat(auth): add jwt token refresh) based on the following git diff.
+COMMIT_MSG_PROMPT = """Generate a clean, conventional commit message \
+(e.g. feat(auth): add jwt token refresh) based on the following git diff.
 Only output the commit message itself, without extra preamble or markdown quotes.
 
 Diff:
