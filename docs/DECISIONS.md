@@ -37,3 +37,12 @@ This file tracks all key architectural and implementation decisions made during 
 - **Context:** Tool failures, missing binaries, or bad connections must fail gracefully with actionable user messages rather than raw tracebacks.
 - **Decision:** Define a central `KhaslanaError` exception hierarchy in `core/errors.py`. CLI handles catching top-level `KhaslanaError` and presenting formatted error panels, showing tracebacks only when `--debug` is active.
 - **Consequences:** Clean CLI experience and clear diagnostics.
+
+---
+
+## ADR 005: Hybrid Retrieval with BM25Plus & Reciprocal Rank Fusion
+
+- **Status:** Accepted
+- **Context:** Dense embeddings alone miss exact keyword matches (e.g. identifier names like `AuthService`), while BM25 alone misses semantic synonyms. Small repository fixtures also suffer from negative IDF under classic Okapi formulas.
+- **Decision:** Combine BM25Plus (with camelCase/snake_case sub-token splitting) with dense vector embeddings via weighted score normalization (default: 0.6 semantic / 0.4 BM25) and Reciprocal Rank Fusion (`rrf`). Support priority boosts for focused files and modified working tree files.
+- **Consequences:** High recall on code searches with exact symbol and conceptual queries.

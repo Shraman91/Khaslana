@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import typer
 from rich.console import Console
@@ -218,6 +218,109 @@ def explain(
             raise typer.Exit(code=1) from e
 
     asyncio.run(_run())
+
+
+@app.command("search")
+def search_cmd(
+    query: Annotated[str, typer.Argument(help="Code search query or keywords")],
+    top_k: Annotated[int, typer.Option("--top-k", "-k", help="Number of results")] = 5,
+    explain: Annotated[
+        bool,
+        typer.Option(
+            "--explain",
+            "-e",
+            help="Show detailed scoring breakdown (semantic, BM25, boost)",
+        ),
+    ] = False,
+    file: Annotated[
+        str | None, typer.Option("--file", "-f", help="Prioritize matches in specific file")
+    ] = None,
+    fusion: Annotated[
+        str, typer.Option("--fusion", help="Fusion strategy: weighted or rrf")
+    ] = "weighted",
+    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+) -> None:
+    """Perform hybrid code search over indexed repository."""
+    config = load_config(cli_overrides={"debug": True} if debug else None)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    cwd = Path.cwd()
+    persist_dir = cwd / config.retrieval.store_dir
+
+    if not persist_dir.is_dir():
+        console.print(
+            "[bold yellow]Warning:[/bold yellow] No index found at "
+            f"[cyan]{persist_dir}[/cyan]. Run [bold green]khaslana index[/bold green] first."
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        from rich.table import Table
+
+        store = ChromaVectorStore(persist_dir)
+        embedder = get_embedding_provider(config)
+        pipeline = RetrievalPipeline(store, embedder)
+
+        fusion_mode: Literal["weighted", "rrf"] = (
+            "rrf" if fusion.lower() == "rrf" else "weighted"
+        )
+        results = pipeline.search(
+            query=query,
+            top_k=top_k,
+            fusion=fusion_mode,
+            focused_file=file,
+        )
+
+        if not results:
+            console.print(f"[yellow]No matching code found for query:[/yellow] {query}")
+            return
+
+        console.print(
+            f"\n[bold green]Found {len(results)} matches for:[/bold green] \"{query}\"\n"
+        )
+
+        if explain:
+            table = Table(title="Search Results & Score Breakdown", show_header=True)
+            table.add_column("Rank", justify="right", style="cyan", width=4)
+            table.add_column("File:Lines", style="bold green", width=30)
+            table.add_column("Symbol", style="magenta", width=18)
+            table.add_column("Semantic", justify="right", width=10)
+            table.add_column("BM25", justify="right", width=10)
+            table.add_column("Boost", justify="right", width=8)
+            table.add_column("Final Score", justify="right", style="bold yellow", width=12)
+
+            for rank, r in enumerate(results, 1):
+                chunk = r.chunk
+                file_lines = f"{chunk.file}:{chunk.line_range[0]}-{chunk.line_range[1]}"
+                sem_str = f"{r.semantic_score:.4f}" if r.semantic_score is not None else "N/A"
+                bm25_str = f"{r.bm25_score:.4f}" if r.bm25_score is not None else "N/A"
+                table.add_row(
+                    str(rank),
+                    file_lines,
+                    chunk.symbol or "-",
+                    sem_str,
+                    bm25_str,
+                    f"{r.boost:.2f}x",
+                    f"{r.score:.4f}",
+                )
+
+            console.print(table)
+        else:
+            for i, r in enumerate(results, 1):
+                chunk = r.chunk
+                sym_info = f" ({chunk.symbol})" if chunk.symbol else ""
+                loc = f"{chunk.file}:{chunk.line_range[0]}-{chunk.line_range[1]}"
+                header = (
+                    f"[bold cyan]{i}.[/bold cyan] [bold green]{loc}[/bold green]"
+                    f"{sym_info} [dim](score: {r.score:.4f})[/dim]"
+                )
+                console.print(header)
+                preview = "\n".join(chunk.text.splitlines()[:5])
+                console.print(Panel(preview, border_style="dim"))
+
+    except Exception as e:
+        _handle_error(e, config.debug)
+        raise typer.Exit(code=1) from e
 
 
 @app.command("doctor")

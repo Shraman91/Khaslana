@@ -158,7 +158,7 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 |-------|---------------------------|---------|
 | 0     | Foundation + LLM routing  | ✅ Done |
 | 1     | RAG System                | ✅ Done |
-| 2     | Hybrid Retrieval          | 🔲 TODO |
+| 2     | Hybrid Retrieval          | ✅ Done |
 | 3     | Code Intelligence         | 🔲 TODO |
 | 4     | Agent System              | 🔲 TODO |
 | 5     | Git Integration           | 🔲 TODO |
