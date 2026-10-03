@@ -10,6 +10,9 @@ from pathlib import Path
 import pathspec
 from pydantic import BaseModel
 
+from khaslana.intelligence.callgraph import CallGraph
+from khaslana.intelligence.parser import parse_source
+from khaslana.intelligence.symbols import SymbolTable
 from khaslana.retrieval.chunker import CodeChunker
 from khaslana.retrieval.embeddings import EmbeddingProvider
 from khaslana.retrieval.models import Chunk
@@ -129,18 +132,20 @@ def load_gitignore_spec(root_dir: Path) -> pathspec.PathSpec:
 
 
 class Indexer:
-    """Indexes source code repositories into vector stores."""
+    """Indexes source code repositories into vector stores and symbol tables."""
 
     def __init__(
         self,
         vector_store: VectorStore,
         embedding_provider: EmbeddingProvider,
         chunker: CodeChunker | None = None,
+        symbol_table: SymbolTable | None = None,
         max_file_size_bytes: int = 1_000_000,  # 1MB
     ) -> None:
         self.store = vector_store
         self.embedder = embedding_provider
         self.chunker = chunker or CodeChunker()
+        self.symbol_table = symbol_table
         self.max_file_size_bytes = max_file_size_bytes
 
     def index_directory(
@@ -200,7 +205,7 @@ class Indexer:
         total_files = len(files_to_process)
         all_chunks: list[Chunk] = []
 
-        # 2. Chunk files
+        # 2. Chunk files and index symbols
         for i, file_path in enumerate(files_to_process):
             rel_path = file_path.relative_to(root).as_posix()
             if progress_callback:
@@ -211,6 +216,12 @@ class Indexer:
                 mtime = file_path.stat().st_mtime
                 ext = file_path.suffix.lower()
                 lang = EXTENSION_TO_LANGUAGE.get(ext, "plaintext")
+
+                # Parse into symbol table if available
+                if self.symbol_table:
+                    parsed = parse_source(rel_path, content, language=lang)
+                    self.symbol_table.index_parsed_file(parsed)
+
                 chunks = self.chunker.chunk_file(
                     file_path=rel_path,
                     content=content,
@@ -225,9 +236,17 @@ class Indexer:
             except Exception:
                 summary.skipped_files += 1
 
+        # 3. Enrich chunks with call graph if symbol table is active
+        if self.symbol_table and all_chunks:
+            call_graph = CallGraph(self.symbol_table)
+            for chunk in all_chunks:
+                if chunk.symbol and chunk.symbol != "<module_scope>":
+                    chunk.callers = call_graph.get_callers(chunk.symbol, max_depth=1)
+                    chunk.callees = call_graph.get_callees(chunk.symbol, max_depth=1)
+
         summary.total_chunks = len(all_chunks)
 
-        # 3. Batch embed and store chunks
+        # 4. Batch embed and store chunks
         if all_chunks:
             batch_size = 64
             for i in range(0, len(all_chunks), batch_size):

@@ -10,6 +10,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 
 from khaslana.cli.config_cmd import config_app
 from khaslana.cli.doctor import run_doctor
@@ -18,6 +19,8 @@ from khaslana.core.errors import KhaslanaError
 from khaslana.core.llm import ChatMessage, LLMRouter
 from khaslana.core.logging import setup_logging
 from khaslana.core.prompts import EXPLAIN_PROMPT_TEMPLATE, SYSTEM_PROMPT
+from khaslana.intelligence.callgraph import CallGraph
+from khaslana.intelligence.symbols import SymbolTable
 
 # Retrieval imports
 from khaslana.retrieval.chunker import CodeChunker
@@ -56,7 +59,7 @@ def index_cmd(
         bool, typer.Option("--memory", help="Use in-memory vector store (ephemeral)")
     ] = False,
 ) -> None:
-    """Index a directory into the local vector database for RAG."""
+    """Index a directory into the local vector database for RAG and code intelligence."""
     config = load_config(cli_overrides={"debug": True} if debug else None)
     setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
 
@@ -66,13 +69,20 @@ def index_cmd(
         persist_dir = path.resolve() / config.retrieval.store_dir
         store: Any = MemoryVectorStore() if memory else ChromaVectorStore(persist_dir)
 
-        # Allow fallback to fast hash if real transformers are missing/slow
+        sym_db_path = path.resolve() / ".khaslana" / "symbols.db"
+        sym_table = SymbolTable(":memory:") if memory else SymbolTable(sym_db_path)
+
         embedder = get_embedding_provider(config)
         chunker = CodeChunker(
             target_chunk_tokens=config.retrieval.chunk_size,
             overlap_tokens=config.retrieval.chunk_overlap,
         )
-        indexer = Indexer(store, embedder, chunker)
+        indexer = Indexer(
+            store,
+            embedder,
+            chunker,
+            symbol_table=sym_table,
+        )
 
         with Progress(
             SpinnerColumn(),
@@ -89,7 +99,8 @@ def index_cmd(
 
         console.print(
             f"\n[green]✓ Indexed {summary.indexed_files} files "
-            f"({summary.total_chunks} chunks)[/green] in {summary.elapsed_seconds}s. "
+            f"({summary.total_chunks} chunks, {sym_table.count_symbols()} symbols, "
+            f"{sym_table.count_calls()} call edges)[/green] in {summary.elapsed_seconds}s. "
             f"Skipped {summary.skipped_files} files."
         )
 
@@ -163,13 +174,21 @@ def ask(
 @app.command("explain")
 def explain(
     file_path: Annotated[Path, typer.Argument(help="Path to the file to explain")],
+    deep: Annotated[
+        bool,
+        typer.Option(
+            "--deep",
+            "-d",
+            help="Deep analysis combining symbols, call graph neighbors, and retrieved context",
+        ),
+    ] = False,
     model: Annotated[
         str | None, typer.Option("--model", "-m", help="Override model name")
     ] = None,
     provider: Annotated[
         str | None, typer.Option("--provider", "-p", help="Override provider")
     ] = None,
-    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+    debug: Annotated[bool, typer.Option("--debug", help="Show debug logs")] = False,
 ) -> None:
     """Analyze and explain a code file in detail."""
     if not file_path.is_file():
@@ -200,6 +219,29 @@ def explain(
         content=content,
     )
 
+    if deep:
+        sym_db_path = Path.cwd() / ".khaslana" / "symbols.db"
+        if sym_db_path.is_file():
+            sym_table = SymbolTable(sym_db_path)
+            call_graph = CallGraph(sym_table)
+            symbols = sym_table.get_symbols_in_file(str(file_path).replace("\\", "/"))
+
+            deep_intel: list[str] = [
+                "\n--- Deep Code Intelligence ---",
+                f"Symbols defined in this file ({len(symbols)}):",
+            ]
+            for s in symbols:
+                callers = call_graph.get_callers(s.name)
+                callees = call_graph.get_callees(s.name)
+                callers_str = f" | Callers: {', '.join(callers)}" if callers else ""
+                callees_str = f" | Calls: {', '.join(callees)}" if callees else ""
+                deep_intel.append(
+                    f"- [{s.symbol_type}] {s.name} (lines {s.line_range[0]}-{s.line_range[1]})"
+                    f"{callers_str}{callees_str}"
+                )
+
+            prompt += "\n" + "\n".join(deep_intel)
+
     router = LLMRouter(config)
     messages = [
         ChatMessage(role="system", content=SYSTEM_PROMPT),
@@ -209,7 +251,10 @@ def explain(
     async def _run() -> None:
         try:
             provider_info = f"{config.llm.provider}/{config.llm.model}"
-            console.print(f"[bold blue]Explaining {file_path.name} ({provider_info}):[/bold blue]")
+            analysis_type = "Deeply explaining" if deep else "Explaining"
+            console.print(
+                f"[bold blue]{analysis_type} {file_path.name} ({provider_info}):[/bold blue]"
+            )
             async for chunk in router.stream(messages):
                 console.print(chunk, end="")
             console.print()
@@ -218,6 +263,119 @@ def explain(
             raise typer.Exit(code=1) from e
 
     asyncio.run(_run())
+
+
+@app.command("where-used")
+def where_used_cmd(
+    symbol_name: Annotated[str, typer.Argument(help="Symbol identifier to search for")],
+    path: Annotated[
+        Optional[Path], typer.Option("--path", "-p", help="Target project root")
+    ] = None,
+    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+) -> None:
+    """Find all definitions and call site references for a symbol."""
+    config = load_config(cli_overrides={"debug": True} if debug else None)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_dir = path or Path.cwd()
+    sym_db_path = target_dir / ".khaslana" / "symbols.db"
+    if not sym_db_path.is_file():
+        console.print(
+            "[bold yellow]Warning:[/bold yellow] No symbol database found. "
+            "Run [bold green]khaslana index[/bold green] first."
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        sym_table = SymbolTable(sym_db_path)
+        defs = sym_table.find_definitions(symbol_name)
+        refs = sym_table.find_references(symbol_name)
+
+        console.print(f"\n[bold blue]Symbol Lookup:[/bold blue] [cyan]{symbol_name}[/cyan]\n")
+
+        # 1. Definitions
+        if defs:
+            console.print(f"[bold green]Definitions ({len(defs)}):[/bold green]")
+            for d in defs:
+                parent = f"{d.parent_symbol}." if d.parent_symbol else ""
+                sig = f"{d.signature}" if d.signature else ""
+                loc = f"{d.file}:{d.line_range[0]}-{d.line_range[1]}"
+                sym_type = f"[bold cyan]{d.symbol_type}[/bold cyan]"
+                sym_name = f"[bold]{parent}{d.name}{sig}[/bold]"
+                console.print(f"  • {sym_type} {sym_name} at [dim green]{loc}[/dim green]")
+                if d.docstring:
+                    console.print(f"    [dim italic]{d.docstring.strip()}[/dim italic]")
+        else:
+            console.print("[dim]No definition found in indexed symbols.[/dim]")
+
+        # 2. References / Call Sites
+        console.print()
+        if refs:
+            console.print(f"[bold green]References & Call Sites ({len(refs)}):[/bold green]")
+            # Group by file
+            by_file: dict[str, list[tuple[str, int]]] = {}
+            for r in refs:
+                by_file.setdefault(r.caller_file, []).append((r.caller_symbol, r.line_number))
+
+            for file_path, call_sites in by_file.items():
+                console.print(f"  [bold underline]{file_path}[/bold underline]:")
+                for caller_sym, line_no in call_sites:
+                    console.print(f"    • Line {line_no} in [magenta]{caller_sym}[/magenta]()")
+        else:
+            console.print("[dim]No call site references found.[/dim]")
+
+    except Exception as e:
+        _handle_error(e, config.debug)
+        raise typer.Exit(code=1) from e
+
+
+@app.command("graph")
+def graph_cmd(
+    symbol_name: Annotated[str, typer.Argument(help="Root symbol to trace")],
+    depth: Annotated[int, typer.Option("--depth", "-d", help="Call traversal depth")] = 2,
+    format_type: Annotated[
+        str, typer.Option("--format", "-f", help="Output format: mermaid, dot, or text")
+    ] = "mermaid",
+    path: Annotated[
+        Optional[Path], typer.Option("--path", "-p", help="Target project root")
+    ] = None,
+    debug: Annotated[bool, typer.Option("--debug", help="Show debug logs")] = False,
+) -> None:
+    """Generate caller/callee call graph around a symbol."""
+    config = load_config(cli_overrides={"debug": True} if debug else None)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_dir = path or Path.cwd()
+    sym_db_path = target_dir / ".khaslana" / "symbols.db"
+    if not sym_db_path.is_file():
+        console.print(
+            "[bold yellow]Warning:[/bold yellow] No symbol database found. "
+            "Run [bold green]khaslana index[/bold green] first."
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        sym_table = SymbolTable(sym_db_path)
+        call_graph = CallGraph(sym_table)
+
+        fmt = format_type.lower()
+        if fmt == "dot":
+            dot_out = call_graph.export_dot(symbol_name, depth=depth)
+            console.print(dot_out)
+        elif fmt == "text":
+            callers = call_graph.get_callers(symbol_name, max_depth=depth)
+            callees = call_graph.get_callees(symbol_name, max_depth=depth)
+            console.print(f"[bold cyan]Call Graph for {symbol_name} (depth={depth}):[/bold cyan]")
+            console.print(f"  [bold]Incoming Callers:[/bold] {', '.join(callers) or 'None'}")
+            console.print(f"  [bold]Outgoing Callees:[/bold] {', '.join(callees) or 'None'}")
+        else:
+            # Default mermaid
+            mermaid_out = call_graph.export_mermaid(symbol_name, depth=depth)
+            console.print(mermaid_out)
+
+    except Exception as e:
+        _handle_error(e, config.debug)
+        raise typer.Exit(code=1) from e
 
 
 @app.command("search")
@@ -255,8 +413,6 @@ def search_cmd(
         raise typer.Exit(code=1)
 
     try:
-        from rich.table import Table
-
         store = ChromaVectorStore(persist_dir)
         embedder = get_embedding_provider(config)
         pipeline = RetrievalPipeline(store, embedder)
