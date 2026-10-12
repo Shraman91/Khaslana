@@ -158,10 +158,17 @@ class CallGraph:
         lines.append("```")
         return "\n".join(lines)
 
-    def export_dot(self, root_symbol: str, depth: int = 2) -> str:
-        """Generate a Graphviz DOT representation around root_symbol."""
+    def export_dot(self, root_symbol: str | None = None, depth: int = 2) -> str:
+        """Generate a Graphviz DOT representation around root_symbol, or full graph if None."""
         lines = ["digraph CallGraph {", '  rankdir="LR";', '  node [shape="box"];']
         visited_edges: set[tuple[str, str]] = set()
+
+        if root_symbol is None:
+            for caller, callees in self._caller_to_callees.items():
+                for callee in callees:
+                    lines.append(f'  "{caller}" -> "{callee}";')
+            lines.append("}")
+            return "\n".join(lines)
 
         def _collect(sym: str, d: int) -> None:
             if d >= depth:

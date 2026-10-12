@@ -269,7 +269,7 @@ def explain(
 def where_used_cmd(
     symbol_name: Annotated[str, typer.Argument(help="Symbol identifier to search for")],
     path: Annotated[
-        Optional[Path], typer.Option("--path", "-p", help="Target project root")
+        Path | None, typer.Option("--path", "-p", help="Target project root")
     ] = None,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
 ) -> None:
@@ -337,7 +337,7 @@ def graph_cmd(
         str, typer.Option("--format", "-f", help="Output format: mermaid, dot, or text")
     ] = "mermaid",
     path: Annotated[
-        Optional[Path], typer.Option("--path", "-p", help="Target project root")
+        Path | None, typer.Option("--path", "-p", help="Target project root")
     ] = None,
     debug: Annotated[bool, typer.Option("--debug", help="Show debug logs")] = False,
 ) -> None:

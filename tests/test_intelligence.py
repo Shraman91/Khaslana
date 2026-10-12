@@ -230,7 +230,7 @@ def test_callgraph_traversal_and_cycles(tmp_path: Path) -> None:
     # DOT export
     dot = graph.export_dot()
     assert "digraph CallGraph" in dot
-    assert "fn_a -> fn_b" in dot
+    assert '"fn_a" -> "fn_b"' in dot
 
 
 def test_where_used_and_graph_cli(tmp_path: Path) -> None:
@@ -245,16 +245,22 @@ def test_where_used_and_graph_cli(tmp_path: Path) -> None:
     assert res_index.exit_code == 0
 
     # Test where-used command
-    res_where = runner.invoke(app, ["where-used", "create_access_token"])
+    res_where = runner.invoke(
+        app, ["where-used", "authenticate_user", "--path", str(sample_copy)]
+    )
     assert res_where.exit_code == 0
     assert "Definitions" in res_where.output or "References" in res_where.output
 
     # Test graph command
-    res_graph = runner.invoke(app, ["graph", "authenticate_user", "--format", "mermaid"])
+    res_graph = runner.invoke(
+        app, ["graph", "authenticate_user", "--path", str(sample_copy), "--format", "mermaid"]
+    )
     assert res_graph.exit_code == 0
     assert "graph TD" in res_graph.output
 
     # Test graph dot format
-    res_dot = runner.invoke(app, ["graph", "authenticate_user", "--format", "dot"])
+    res_dot = runner.invoke(
+        app, ["graph", "authenticate_user", "--path", str(sample_copy), "--format", "dot"]
+    )
     assert res_dot.exit_code == 0
     assert "digraph" in res_dot.output
