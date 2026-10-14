@@ -67,3 +67,6 @@ mypy_path = "src"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.pyrefly]
+search-path = ["src", "."]
