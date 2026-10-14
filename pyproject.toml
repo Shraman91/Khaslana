@@ -30,6 +30,7 @@ dependencies = [
     "toml>=0.10.0",
     "tenacity>=8.0.0",
     "structlog>=23.0.0",
+    "gitpython>=3.1.0",
 ]
 
 [project.optional-dependencies]

@@ -58,3 +58,15 @@ This file tracks all key architectural and implementation decisions made during 
   2. Implement loop/repeat-action detection to prevent infinite repetition of identical tool calls.
   3. Implement strict command execution policies in `run_command`: allowlist for safe inspection commands, denylist for dangerous actions, and an interactive confirmation prompt (or programmable confirmation callback) for any mutating or non-allowlisted command.
 - **Consequences:** Deterministic, safe, and works uniformly across Ollama, Gemini, OpenAI, and testing fakes.
+
+---
+
+## ADR 007: Diff-Aware Git Review with Static Symbol Context Enrichment
+
+- **Status:** Accepted
+- **Context:** Standard code reviews looking solely at git diff hunks miss the broader architectural impact, such as callers of modified methods or whether a changed function signature breaks existing call sites.
+- **Decision:**
+  1. Build a dedicated Git inspector in `tools/git.py` supporting staged diffs, branch diffs (e.g. against `main`), logs, blame, and changed files.
+  2. Implement diff-aware context enrichment: parse files in the diff to locate which functions or classes were touched, then query Phase 3's `SymbolTable` and `CallGraph` to retrieve surrounding definitions, callers, and callees.
+  3. Format review output with severities (`bug`, `security`, `perf`, `style`), line references, and suggested patches, supporting `--format rich|json|markdown` for CLI and CI integration.
+- **Consequences:** Code reviews have deep semantic context beyond raw diff lines, with seamless output for both humans and CI pipelines.

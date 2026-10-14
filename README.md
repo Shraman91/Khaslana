@@ -29,6 +29,12 @@ A production-grade, local-first AI developer tool in Python.
   - ReAct agent loop with max-iteration caps, token budgeting, loop detection, and JSON auto-repair.
   - Mutating shell command security with interactive confirmation prompts.
   - Commands: `khaslana debug <error.log>` and `khaslana analyze project`.
+- **Git Integration & Diff-Aware Code Review (Phase 5)**:
+  - Git inspector using GitPython for staged/unstaged/branch diffs, blame, and commit history.
+  - Diff-aware context enrichment: maps touched diff lines to symbol definitions and resolves callers/callees.
+  - Multi-severity code review (`bug`, `security`, `perf`, `style`) with patch generation.
+  - Multi-format output for humans and CI pipelines (`--format rich|json|markdown`).
+  - Commands: `khaslana review --staged` (or `--branch <name>`), `khaslana explain-diff`, and `khaslana commit-msg`.
 
 ---
 
@@ -82,6 +88,12 @@ khaslana graph authenticate_user --format mermaid
 # 7. Agentic debugging and project analysis
 khaslana debug error.log
 khaslana analyze project
+
+# 8. Git review, diff explanation, and conventional commit generation
+khaslana review --staged
+khaslana review --branch main --format markdown
+khaslana explain-diff --staged
+khaslana commit-msg
 ```
 
 ---

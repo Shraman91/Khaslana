@@ -30,6 +30,12 @@ from khaslana.retrieval.embeddings import get_embedding_provider
 from khaslana.retrieval.indexer import Indexer
 from khaslana.retrieval.pipeline import RetrievalPipeline
 from khaslana.retrieval.store import ChromaVectorStore, MemoryVectorStore
+from khaslana.tools.review import (
+    CodeReviewer,
+    format_review_json,
+    format_review_markdown,
+    format_review_rich,
+)
 
 app = typer.Typer(
     name="khaslana",
@@ -633,6 +639,158 @@ def analyze_cmd(
     except Exception as e:
         _handle_error(e, config.debug)
         raise typer.Exit(code=1) from e
+
+
+@app.command("review")
+def review_cmd(
+    staged: Annotated[
+        bool, typer.Option("--staged", help="Review staged changes")
+    ] = False,
+    branch: Annotated[
+        str | None, typer.Option("--branch", "-b", help="Review changes against branch")
+    ] = None,
+    format_type: Annotated[
+        str, typer.Option("--format", "-f", help="Output format: rich, json, or markdown")
+    ] = "rich",
+    path: Annotated[
+        Path | None, typer.Option("--path", "-p", help="Target project root directory")
+    ] = None,
+    model: Annotated[
+        str | None, typer.Option("--model", "-m", help="Override LLM model name")
+    ] = None,
+    provider: Annotated[
+        str | None, typer.Option("--provider", help="Override LLM provider")
+    ] = None,
+    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+) -> None:
+    """Perform a diff-aware code review reporting bugs, security, perf, and style findings."""
+    overrides: dict[str, Any] = {}
+    if model:
+        overrides.setdefault("llm", {})["model"] = model
+    if provider:
+        overrides.setdefault("llm", {})["provider"] = provider
+    if debug:
+        overrides["debug"] = True
+
+    config = load_config(cli_overrides=overrides)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_root = (path or Path.cwd()).resolve()
+    router = LLMRouter(config)
+    reviewer = CodeReviewer(router=router, root_dir=target_root, console=console)
+
+    async def _run() -> None:
+        try:
+            report = await reviewer.review(staged=staged, branch=branch)
+            fmt = format_type.lower()
+            if fmt == "json":
+                console.print(format_review_json(report))
+            elif fmt == "markdown":
+                console.print(format_review_markdown(report))
+            else:
+                format_review_rich(report, console)
+        except Exception as e:
+            _handle_error(e, config.debug)
+            raise typer.Exit(code=1) from e
+
+    asyncio.run(_run())
+
+
+@app.command("explain-diff")
+def explain_diff_cmd(
+    staged: Annotated[
+        bool, typer.Option("--staged", help="Explain staged changes")
+    ] = False,
+    branch: Annotated[
+        str | None, typer.Option("--branch", "-b", help="Explain changes against branch")
+    ] = None,
+    path: Annotated[
+        Path | None, typer.Option("--path", "-p", help="Target project root directory")
+    ] = None,
+    model: Annotated[
+        str | None, typer.Option("--model", "-m", help="Override LLM model name")
+    ] = None,
+    provider: Annotated[
+        str | None, typer.Option("--provider", help="Override LLM provider")
+    ] = None,
+    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+) -> None:
+    """Explain the changes introduced by a git diff and their system impact."""
+    overrides: dict[str, Any] = {}
+    if model:
+        overrides.setdefault("llm", {})["model"] = model
+    if provider:
+        overrides.setdefault("llm", {})["provider"] = provider
+    if debug:
+        overrides["debug"] = True
+
+    config = load_config(cli_overrides=overrides)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_root = (path or Path.cwd()).resolve()
+    router = LLMRouter(config)
+    reviewer = CodeReviewer(router=router, root_dir=target_root, console=console)
+
+    async def _run() -> None:
+        try:
+            explanation = await reviewer.explain_diff(staged=staged, branch=branch)
+            console.print(
+                Panel(
+                    explanation,
+                    title="[bold blue]Git Diff Explanation[/bold blue]",
+                    border_style="blue",
+                )
+            )
+        except Exception as e:
+            _handle_error(e, config.debug)
+            raise typer.Exit(code=1) from e
+
+    asyncio.run(_run())
+
+
+@app.command("commit-msg")
+def commit_msg_cmd(
+    path: Annotated[
+        Path | None, typer.Option("--path", "-p", help="Target project root directory")
+    ] = None,
+    model: Annotated[
+        str | None, typer.Option("--model", "-m", help="Override LLM model name")
+    ] = None,
+    provider: Annotated[
+        str | None, typer.Option("--provider", help="Override LLM provider")
+    ] = None,
+    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+) -> None:
+    """Generate a Conventional Commit message from staged git changes."""
+    overrides: dict[str, Any] = {}
+    if model:
+        overrides.setdefault("llm", {})["model"] = model
+    if provider:
+        overrides.setdefault("llm", {})["provider"] = provider
+    if debug:
+        overrides["debug"] = True
+
+    config = load_config(cli_overrides=overrides)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_root = (path or Path.cwd()).resolve()
+    router = LLMRouter(config)
+    reviewer = CodeReviewer(router=router, root_dir=target_root, console=console)
+
+    async def _run() -> None:
+        try:
+            msg = await reviewer.generate_commit_message()
+            if not msg:
+                console.print(
+                    "[yellow]No staged changes found. Run `git add <file>` first.[/yellow]"
+                )
+                raise typer.Exit(code=1)
+            console.print(msg)
+        except Exception as e:
+            _handle_error(e, config.debug)
+            raise typer.Exit(code=1) from e
+
+    asyncio.run(_run())
 
 
 @app.command("doctor")

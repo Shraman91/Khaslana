@@ -164,6 +164,32 @@ AgentTrace + Final Answer rendered via Rich Live Panel
 
 ---
 
+## Data Flow: Git Integration (`khaslana review` / `explain-diff` / `commit-msg`)
+
+```
+Git Working Tree (Staged / Branch / Unstaged)
+    │
+    ▼
+Git Inspector (`tools/git.py`)
+  ├─ Extract diff patches & changed files
+  ├─ Query AST & Symbol Table for changed symbols
+  └─ Resolve callers/callees (Context Enrichment)
+    │
+    ▼
+Prompt Assembly (Diff + Symbol Definitions + Call Graph Context)
+    │
+    ▼
+LLM Router (Ollama / Gemini / OpenAI)
+    │
+    ▼
+Output Formatter:
+  ├─ Rich Interactive Severity Table (bug / security / perf / style)
+  ├─ Structured JSON (--format json)
+  └─ GitHub Markdown (--format markdown)
+```
+
+---
+
 ## Configuration Precedence
 
 ```
@@ -186,8 +212,8 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 | 1     | RAG System                | ✅ Done        |
 | 2     | Hybrid Retrieval          | ✅ Done        |
 | 3     | Code Intelligence         | ✅ Done        |
-| 4     | Agent System              | 🟡 In Progress |
-| 5     | Git Integration           | 🔲 TODO        |
+| 4     | Agent System              | ✅ Done        |
+| 5     | Git Integration           | ✅ Done        |
 | 6     | Sandbox Execution         | 🔲 TODO        |
 | 7     | Memory System             | 🔲 TODO        |
 | 8     | Background Indexing       | 🔲 TODO        |
