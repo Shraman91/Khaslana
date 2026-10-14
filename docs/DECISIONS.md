@@ -46,3 +46,15 @@ This file tracks all key architectural and implementation decisions made during 
 - **Context:** Dense embeddings alone miss exact keyword matches (e.g. identifier names like `AuthService`), while BM25 alone misses semantic synonyms. Small repository fixtures also suffer from negative IDF under classic Okapi formulas.
 - **Decision:** Combine BM25Plus (with camelCase/snake_case sub-token splitting) with dense vector embeddings via weighted score normalization (default: 0.6 semantic / 0.4 BM25) and Reciprocal Rank Fusion (`rrf`). Support priority boosts for focused files and modified working tree files.
 - **Consequences:** High recall on code searches with exact symbol and conceptual queries.
+
+---
+
+## ADR 006: ReAct Agent Loop with Strict-JSON Schema and Action Confirmation
+
+- **Status:** Accepted
+- **Context:** Agent workflows require multi-step reasoning, tool invocations, and interactive execution. Many local LLMs lack proprietary native function calling APIs or output markdown code blocks. In addition, executing arbitrary shell commands without boundaries poses security and destruction risks.
+- **Decision:**
+  1. Standardize on JSON-in-prompt ReAct loop (`{"thought", "action", "action_input"}` / `{"thought", "final_answer"}`). Implement robust JSON auto-repair (strip code fences, fix trailing commas, unescaped characters).
+  2. Implement loop/repeat-action detection to prevent infinite repetition of identical tool calls.
+  3. Implement strict command execution policies in `run_command`: allowlist for safe inspection commands, denylist for dangerous actions, and an interactive confirmation prompt (or programmable confirmation callback) for any mutating or non-allowlisted command.
+- **Consequences:** Deterministic, safe, and works uniformly across Ollama, Gemini, OpenAI, and testing fakes.

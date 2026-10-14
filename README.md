@@ -18,6 +18,17 @@ A production-grade, local-first AI developer tool in Python.
   - Score fusion supporting both Weighted normalization (default 0.6 semantic / 0.4 BM25) and Reciprocal Rank Fusion (`rrf`).
   - Contextual priority boosts for focused files (`--file`) and git-modified files.
   - Explainable code search CLI (`khaslana search --explain`) detailing scoring components.
+- **Code Intelligence Layer (Phase 3)**:
+  - Multi-language AST parsing (Python AST + regex support for TypeScript, Go, Rust, Java).
+  - SQLite symbol table with definition lookups, class/method hierarchies, and import edges.
+  - Static call graph with transitive caller/callee resolution, cycle detection, and Mermaid/DOT exports.
+  - Commands: `khaslana where-used <symbol>`, `khaslana graph <symbol>`, and `khaslana explain --deep <file>`.
+- **ReAct Agent System (Phase 4)**:
+  - Extensible `Tool` base class and `ToolRegistry` with strict Pydantic input/output validation.
+  - Core tools: `read_file`, `search_code`, `list_files`, `run_command`, `find_symbol`, `where_used`.
+  - ReAct agent loop with max-iteration caps, token budgeting, loop detection, and JSON auto-repair.
+  - Mutating shell command security with interactive confirmation prompts.
+  - Commands: `khaslana debug <error.log>` and `khaslana analyze project`.
 
 ---
 
@@ -63,6 +74,14 @@ khaslana ask "What does the auth system do?"
 
 # 5. Explain specific files in detail
 khaslana explain src/khaslana/retrieval/indexer.py
+
+# 6. Trace symbol definitions and references
+khaslana where-used AuthService
+khaslana graph authenticate_user --format mermaid
+
+# 7. Agentic debugging and project analysis
+khaslana debug error.log
+khaslana analyze project
 ```
 
 ---

@@ -138,6 +138,32 @@ Streamed output → rich console
 
 ---
 
+---
+
+## Data Flow: Agent ReAct Loop (`khaslana debug` / `khaslana analyze`)
+
+```
+User Task (e.g. error.log or project analysis)
+    │
+    ▼
+CLI → initialize ToolRegistry + ReAct AgentLoop
+    │
+    ▼
+┌───────────────── ReAct Iteration ──────────────────┐
+│ 1. Assemble prompt with tool schemas + history     │
+│ 2. Planner (LLM) emits JSON Action or Final Answer │
+│ 3. JSON Repair / Parser extracts Action            │
+│ 4. Loop Detection checks for repeated tool calls   │
+│ 5. Tool execution (with confirm for mutating cmds) │
+│ 6. Observation appended to history                 │
+└────────────────────────────────────────────────────┘
+    │ (repeated until Final Answer or max iterations)
+    ▼
+AgentTrace + Final Answer rendered via Rich Live Panel
+```
+
+---
+
 ## Configuration Precedence
 
 ```
@@ -154,18 +180,16 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 
 ## Phase Status
 
-| Phase | Feature                   | Status  |
-|-------|---------------------------|---------|
-| 0     | Foundation + LLM routing  | ✅ Done |
-| 1     | RAG System                | ✅ Done |
-| 2     | Hybrid Retrieval          | ✅ Done |
-| 3     | Code Intelligence         | 🔲 TODO |
-| 4     | Agent System              | 🔲 TODO |
-| 5     | Git Integration           | 🔲 TODO |
-| 6     | Sandbox Execution         | 🔲 TODO |
-| 7     | Memory System             | 🔲 TODO |
-| 8     | Background Indexing       | 🔲 TODO |
-| 9     | Plugin System             | 🔲 TODO |
-| 10    | Merge Conflict Resolution | 🔲 TODO |
-| 11    | Deployment Doctor         | 🔲 TODO |
-| 12    | TUI                       | 🔲 TODO |
+| Phase | Feature                   | Status         |
+|-------|---------------------------|----------------|
+| 0     | Foundation + LLM routing  | ✅ Done        |
+| 1     | RAG System                | ✅ Done        |
+| 2     | Hybrid Retrieval          | ✅ Done        |
+| 3     | Code Intelligence         | ✅ Done        |
+| 4     | Agent System              | 🟡 In Progress |
+| 5     | Git Integration           | 🔲 TODO        |
+| 6     | Sandbox Execution         | 🔲 TODO        |
+| 7     | Memory System             | 🔲 TODO        |
+| 8     | Background Indexing       | 🔲 TODO        |
+| 9     | Plugin System             | 🔲 TODO        |
+| 10    | TUI                       | 🔲 TODO        |

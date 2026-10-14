@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
+from typing import Literal
 
 from khaslana.intelligence.models import CallEdge, ImportEdge, ParsedFile, Symbol
 
@@ -73,7 +74,9 @@ class PythonASTVisitor(ast.NodeVisitor):
         end = getattr(node, "end_lineno", start)
         doc = ast.get_docstring(node)
         parent = ".".join(self._current_scope) if self._current_scope else None
-        sym_type = "method" if (self._current_scope or is_method) else "function"
+        sym_type: Literal["function", "method"] = (
+            "method" if (self._current_scope or is_method) else "function"
+        )
 
         # Extract arg names
         args = [a.arg for a in node.args.args]

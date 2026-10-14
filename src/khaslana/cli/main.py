@@ -12,6 +12,8 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from khaslana.agents.factory import create_agent_tool_registry
+from khaslana.agents.loop import AgentLoop
 from khaslana.cli.config_cmd import config_app
 from khaslana.cli.doctor import run_doctor
 from khaslana.core.config import load_config
@@ -474,6 +476,160 @@ def search_cmd(
                 preview = "\n".join(chunk.text.splitlines()[:5])
                 console.print(Panel(preview, border_style="dim"))
 
+    except Exception as e:
+        _handle_error(e, config.debug)
+        raise typer.Exit(code=1) from e
+
+
+@app.command("debug")
+def debug_cmd(
+    log_file: Annotated[Path, typer.Argument(help="Path to error log or traceback file")],
+    path: Annotated[
+        Path | None, typer.Option("--path", "-p", help="Target project root directory")
+    ] = None,
+    max_iters: Annotated[
+        int, typer.Option("--max-iters", "-i", help="Maximum agent iterations")
+    ] = 10,
+    model: Annotated[
+        str | None, typer.Option("--model", "-m", help="Override LLM model name")
+    ] = None,
+    provider: Annotated[
+        str | None, typer.Option("--provider", help="Override LLM provider")
+    ] = None,
+    auto_approve: Annotated[
+        bool, typer.Option("--yes", "-y", help="Auto-approve mutating commands")
+    ] = False,
+    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+) -> None:
+    """Analyze an error log, locate relevant code, hypothesize root causes, and propose fixes."""
+    overrides: dict[str, Any] = {}
+    if model:
+        overrides.setdefault("llm", {})["model"] = model
+    if provider:
+        overrides.setdefault("llm", {})["provider"] = provider
+    if debug:
+        overrides["debug"] = True
+
+    config = load_config(cli_overrides=overrides)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_root = (path or Path.cwd()).resolve()
+
+    if not log_file.exists():
+        console.print(f"[bold red]Error:[/bold red] Error log file '{log_file}' does not exist.")
+        raise typer.Exit(code=1)
+
+    try:
+        log_content = log_file.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        _handle_error(e, config.debug)
+        raise typer.Exit(code=1) from e
+
+    def _confirm(cmd: str) -> bool:
+        if auto_approve:
+            return True
+        return typer.confirm(f"Agent wants to execute: '{cmd}'. Allow?", default=False)
+
+    router = LLMRouter(config)
+    tools = create_agent_tool_registry(
+        root_dir=target_root,
+        config=config,
+        confirmation_handler=_confirm,
+    )
+
+    loop = AgentLoop(
+        llm=router,
+        tool_registry=tools,
+        max_iterations=max_iters,
+        console=console,
+        verbose=True,
+    )
+
+    task = (
+        "Analyze the following error traceback and resolve the issue:\n\n"
+        f"```\n{log_content}\n```\n\n"
+        "Instructions:\n"
+        "1. Identify the failing files, functions, and lines.\n"
+        "2. Inspect the relevant source files with read_file or search_code.\n"
+        "3. Determine the root cause of the bug.\n"
+        "4. Propose a concrete fix with explanation and code diff/patch."
+    )
+
+    console.print(f"[bold blue]Starting agent debugger on:[/bold blue] {log_file.name}\n")
+    try:
+        asyncio.run(loop.run(task))
+    except Exception as e:
+        _handle_error(e, config.debug)
+        raise typer.Exit(code=1) from e
+
+
+@app.command("analyze")
+def analyze_cmd(
+    target: Annotated[
+        str, typer.Argument(help="Target to analyze (default: 'project')")
+    ] = "project",
+    path: Annotated[
+        Path | None, typer.Option("--path", "-p", help="Target project root directory")
+    ] = None,
+    max_iters: Annotated[
+        int, typer.Option("--max-iters", "-i", help="Maximum agent iterations")
+    ] = 10,
+    model: Annotated[
+        str | None, typer.Option("--model", "-m", help="Override LLM model name")
+    ] = None,
+    provider: Annotated[
+        str | None, typer.Option("--provider", help="Override LLM provider")
+    ] = None,
+    auto_approve: Annotated[
+        bool, typer.Option("--yes", "-y", help="Auto-approve mutating commands")
+    ] = False,
+    debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
+) -> None:
+    """Perform architectural analysis, inspect entry points, and highlight risk areas."""
+    overrides: dict[str, Any] = {}
+    if model:
+        overrides.setdefault("llm", {})["model"] = model
+    if provider:
+        overrides.setdefault("llm", {})["provider"] = provider
+    if debug:
+        overrides["debug"] = True
+
+    config = load_config(cli_overrides=overrides)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_root = (path or Path.cwd()).resolve()
+
+    def _confirm(cmd: str) -> bool:
+        if auto_approve:
+            return True
+        return typer.confirm(f"Agent wants to execute: '{cmd}'. Allow?", default=False)
+
+    router = LLMRouter(config)
+    tools = create_agent_tool_registry(
+        root_dir=target_root,
+        config=config,
+        confirmation_handler=_confirm,
+    )
+
+    loop = AgentLoop(
+        llm=router,
+        tool_registry=tools,
+        max_iterations=max_iters,
+        console=console,
+        verbose=True,
+    )
+
+    task = (
+        f"Perform an architectural analysis of this {target}:\n"
+        "1. List files and discover entry points, modules, and structure.\n"
+        "2. Examine package/project configurations and dependency overview.\n"
+        "3. Summarize architecture, design patterns, and module boundaries.\n"
+        "4. Highlight potential risk areas, security concerns, or architectural debt."
+    )
+
+    console.print(f"[bold blue]Starting architectural analysis on:[/bold blue] {target_root}\n")
+    try:
+        asyncio.run(loop.run(task))
     except Exception as e:
         _handle_error(e, config.debug)
         raise typer.Exit(code=1) from e
