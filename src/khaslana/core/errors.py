@@ -52,3 +52,28 @@ class DependencyMissingError(KhaslanaError):
 
 class RedactionError(KhaslanaError):
     """Raised when secret redaction encounters an issue."""
+
+
+class SandboxError(KhaslanaError):
+    """Base error for sandbox container operations."""
+
+
+class SandboxUnavailableError(SandboxError):
+    """Raised when Docker daemon or container runtime is unavailable."""
+
+    def __init__(
+        self,
+        message: str = "Docker daemon is not running or Docker is not installed.",
+        hint: str = (
+            "Please install Docker or start Docker Desktop to use sandbox execution."
+        ),
+    ) -> None:
+        super().__init__(message=message, hint=hint)
+
+
+class ExecutionTimeoutError(SandboxError):
+    """Raised when sandbox execution exceeds allowed timeout."""
+
+
+class MemoryStoreError(KhaslanaError):
+    """Raised when memory persistence or recall encounters an error."""

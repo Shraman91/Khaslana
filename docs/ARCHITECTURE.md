@@ -190,6 +190,45 @@ Output Formatter:
 
 ---
 
+## Data Flow: Sandbox Execution (`khaslana fix <file>`)
+
+```
+Target File + Test Command
+    │
+    ▼
+CLI (`fix` command) → validate file exists
+    │
+    ▼
+DockerRunner (`sandbox/docker_runner.py`)
+  ├─ Auto-detect container image (e.g. python:3.11-slim, node:20-slim)
+  ├─ Create isolated temporary copy of project directory
+  └─ Verify Docker daemon connectivity (fail gracefully if unavailable)
+    │
+    ▼
+┌───────────────── Self-Correcting Fix Loop ─────────────────┐
+│ 1. Run baseline test command in sandbox                    │
+│ 2. If passing -> exit with success, no fix required        │
+│ 3. For attempt in 1..max_attempts:                         │
+│    a. Assemble prompt with code, test cmd, failure output  │
+│    b. LLM proposes full replacement code                   │
+│    c. Compute unified diff vs original code                │
+│    d. Write fix ONLY to sandbox temp workspace             │
+│    e. Re-run tests in ephemeral container                  │
+│    f. If tests pass -> break out of attempt loop           │
+│    g. Else feed new failure back for next attempt          │
+└────────────────────────────────────────────────────────────┘
+    │
+    ▼
+Display attempt diffs & test results via Rich syntax panels
+    │
+    ▼
+User Confirmation (`--yes` or prompt `Apply this fix to <file>?`)
+  ├─ If approved: write verified code to real file in working tree
+  └─ If declined / all attempts fail: working tree left 100% untouched
+```
+
+---
+
 ## Configuration Precedence
 
 ```
@@ -214,7 +253,7 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 | 3     | Code Intelligence         | ✅ Done        |
 | 4     | Agent System              | ✅ Done        |
 | 5     | Git Integration           | ✅ Done        |
-| 6     | Sandbox Execution         | 🔲 TODO        |
+| 6     | Sandbox Execution         | ✅ Done        |
 | 7     | Memory System             | 🔲 TODO        |
 | 8     | Background Indexing       | 🔲 TODO        |
 | 9     | Plugin System             | 🔲 TODO        |

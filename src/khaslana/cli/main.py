@@ -3,13 +3,24 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal
+
+if sys.platform == "win32":
+    try:
+        if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.syntax import Syntax
 from rich.table import Table
 
 from khaslana.agents.factory import create_agent_tool_registry
@@ -30,6 +41,8 @@ from khaslana.retrieval.embeddings import get_embedding_provider
 from khaslana.retrieval.indexer import Indexer
 from khaslana.retrieval.pipeline import RetrievalPipeline
 from khaslana.retrieval.store import ChromaVectorStore, MemoryVectorStore
+from khaslana.sandbox.docker_runner import DockerRunner
+from khaslana.sandbox.fix_loop import SelfCorrectingLoop
 from khaslana.tools.review import (
     CodeReviewer,
     format_review_json,
@@ -786,6 +799,129 @@ def commit_msg_cmd(
                 )
                 raise typer.Exit(code=1)
             console.print(msg)
+        except Exception as e:
+            _handle_error(e, config.debug)
+            raise typer.Exit(code=1) from e
+
+    asyncio.run(_run())
+
+
+@app.command("fix")
+def fix_code(
+    file_path: Annotated[Path, typer.Argument(help="Path to the file to fix")],
+    test_cmd: Annotated[
+        str | None,
+        typer.Option("--test-cmd", "-t", help="Command to run tests (auto-detected if omitted)"),
+    ] = None,
+    max_attempts: Annotated[
+        int,
+        typer.Option("--max-attempts", "-m", help="Maximum fix attempts in sandbox"),
+    ] = 3,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Apply fix automatically without confirmation prompt"),
+    ] = False,
+    model: Annotated[str | None, typer.Option("--model", help="Model to use")] = None,
+    provider: Annotated[str | None, typer.Option("--provider", help="Provider to use")] = None,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", "-d", help="Show debug logs and tracebacks"),
+    ] = False,
+) -> None:
+    """Diagnose and fix code issues using isolated ephemeral sandbox containers."""
+    overrides: dict[str, Any] = {}
+    if model:
+        overrides["model"] = model
+    if provider:
+        overrides["provider"] = provider
+    if debug:
+        overrides["debug"] = True
+
+    config = load_config(cli_overrides=overrides)
+    setup_logging(level="DEBUG" if config.debug else config.log_level, debug=config.debug)
+
+    target_file = file_path.resolve()
+    cwd_root = Path.cwd().resolve()
+
+    try:
+        rel_path = target_file.relative_to(cwd_root)
+        project_root = cwd_root
+    except ValueError:
+        project_root = target_file.parent
+        rel_path = Path(target_file.name)
+
+    router = LLMRouter(config)
+    runner = DockerRunner()
+
+    async def _run() -> None:
+        try:
+            console.print(
+                f"[bold blue]Starting sandbox fix loop for "
+                f"[cyan]{rel_path.as_posix()}[/cyan]...[/bold blue]"
+            )
+            loop = SelfCorrectingLoop(
+                runner=runner,
+                llm=router,
+                project_root=project_root,
+                file_rel_path=rel_path,
+                test_cmd=test_cmd,
+                max_attempts=max_attempts,
+            )
+            session = await loop.run()
+
+            if not session.attempts:
+                if session.success:
+                    console.print(
+                        "[bold green]✓ Tests already pass! No fix required.[/bold green]"
+                    )
+                    return
+                console.print("[yellow]No attempts could be made.[/yellow]")
+                return
+
+            for attempt in session.attempts:
+                status = (
+                    "[bold green]PASS[/bold green]"
+                    if attempt.success
+                    else "[bold red]FAIL[/bold red]"
+                )
+                syntax_diff = Syntax(
+                    attempt.diff or "(No diff)", "diff", theme="monokai", line_numbers=True
+                )
+                panel_title = (
+                    f"Attempt {attempt.attempt_number}/{max_attempts} - Test Status: {status}"
+                )
+                console.print(
+                    Panel(
+                        syntax_diff,
+                        title=panel_title,
+                        border_style="green" if attempt.success else "red",
+                    )
+                )
+
+            if session.success and session.final_code:
+                console.print(
+                    "[bold green]✓ A passing fix was verified inside the sandbox![/bold green]"
+                )
+                apply_fix = yes
+                if not apply_fix:
+                    apply_fix = typer.confirm(
+                        f"Apply this fix to {rel_path.as_posix()}?", default=False
+                    )
+
+                if apply_fix:
+                    target_file.write_text(session.final_code, encoding="utf-8")
+                    console.print(
+                        f"[bold green]✓ Fix applied to {rel_path.as_posix()}[/bold green]"
+                    )
+                else:
+                    console.print("[yellow]Fix discarded. Working tree untouched.[/yellow]")
+            else:
+                console.print(
+                    f"[bold red]✗ Could not fix {rel_path.as_posix()} "
+                    f"after {max_attempts} attempts. Working tree untouched.[/bold red]"
+                )
+                raise typer.Exit(code=1)
+
         except Exception as e:
             _handle_error(e, config.debug)
             raise typer.Exit(code=1) from e

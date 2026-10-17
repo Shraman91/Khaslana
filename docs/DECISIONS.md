@@ -70,3 +70,16 @@ This file tracks all key architectural and implementation decisions made during 
   2. Implement diff-aware context enrichment: parse files in the diff to locate which functions or classes were touched, then query Phase 3's `SymbolTable` and `CallGraph` to retrieve surrounding definitions, callers, and callees.
   3. Format review output with severities (`bug`, `security`, `perf`, `style`), line references, and suggested patches, supporting `--format rich|json|markdown` for CLI and CI integration.
 - **Consequences:** Code reviews have deep semantic context beyond raw diff lines, with seamless output for both humans and CI pipelines.
+
+---
+
+## ADR 008: Ephemeral Sandbox Containers & Non-Destructive Self-Correcting Fixes
+
+- **Status:** Accepted
+- **Context:** Automated code fixes can generate syntax errors, broken dependencies, or test regressions. Executing test commands directly on the host poses security and corruption risks to the active working tree.
+- **Decision:**
+  1. Use Docker containers with strict resource limits (nano_cpus, mem_limit, default 30s timeout) and network isolation (`network_disabled=True`). Auto-detect container base images per language.
+  2. Implement non-destructive copy isolation: create a temporary workspace copy of the project and mount that copy into the container. Never execute unverified code in the host working tree.
+  3. Self-correcting loop: run tests in the sandbox, feed stdout/stderr back into the LLM on failure for up to N attempts, and apply the final fix to the user's real file only upon user confirmation (`--yes` to auto-apply).
+  4. Provide `SandboxUnavailableError` for graceful degradation when Docker is unavailable or not running, and support `FakeSandboxRunner` for deterministic testing.
+- **Consequences:** Safe, isolated code verification with zero risk of working tree corruption during repair attempts.

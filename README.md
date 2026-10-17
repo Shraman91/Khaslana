@@ -94,6 +94,10 @@ khaslana review --staged
 khaslana review --branch main --format markdown
 khaslana explain-diff --staged
 khaslana commit-msg
+
+# 9. Sandbox execution & self-correcting fix loop
+khaslana fix src/utils.py --test-cmd "pytest tests/test_utils.py"
+khaslana fix src/api.py --max-attempts 3 --yes
 ```
 
 ---

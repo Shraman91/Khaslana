@@ -77,26 +77,31 @@ async def run_doctor(config: KhaslanaConfig, console: Console) -> bool:
     table.add_column("Details", style="white")
 
     all_ok = True
+    is_utf = bool(console.encoding and "utf" in console.encoding.lower())
+    sym_ok = "[green]✓[/green]" if is_utf else "[green]OK[/green]"
+    sym_err = "[red]✗[/red]" if is_utf else "[red]ERR[/red]"
+    sym_warn = "[yellow]![/yellow]"
+    sym_dash = "-"
 
     # 1. Ollama check
     ollama_ok, ollama_det = await check_ollama(config.llm.ollama_url)
-    table.add_row("Ollama (Local)", "✓" if ollama_ok else "!", ollama_det)
+    table.add_row("Ollama (Local)", sym_ok if ollama_ok else sym_warn, ollama_det)
 
     # 2. Git check
     git_ok, git_det = check_binary_version("git", ["--version"])
-    table.add_row("Git", "✓" if git_ok else "✗", git_det)
+    table.add_row("Git", sym_ok if git_ok else sym_err, git_det)
     if not git_ok:
         all_ok = False
 
     # 3. Docker check
     docker_ok, docker_det = check_docker()
-    table.add_row("Docker", "✓" if docker_ok else "!", docker_det)
+    table.add_row("Docker", sym_ok if docker_ok else sym_warn, docker_det)
 
     # 4. Kubectl check
     k8s_ok, k8s_det = check_binary_version("kubectl", ["version", "--client"])
     table.add_row(
         "Kubectl",
-        "✓" if k8s_ok else "-",
+        sym_ok if k8s_ok else sym_dash,
         k8s_det if k8s_ok else "Optional (for k8s deploy doctor)",
     )
 
@@ -105,12 +110,12 @@ async def run_doctor(config: KhaslanaConfig, console: Console) -> bool:
     gemini_present = bool(config.llm.gemini_api_key or os.getenv("GEMINI_API_KEY"))
     table.add_row(
         "OpenAI Fallback",
-        "✓" if openai_present else "-",
+        sym_ok if openai_present else sym_dash,
         "Configured" if openai_present else "Not set (optional fallback)",
     )
     table.add_row(
         "Gemini Fallback",
-        "✓" if gemini_present else "-",
+        sym_ok if gemini_present else sym_dash,
         "Configured" if gemini_present else "Not set (optional fallback)",
     )
 
