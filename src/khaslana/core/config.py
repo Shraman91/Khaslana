@@ -59,12 +59,27 @@ class SandboxConfig(BaseModel):
     default_image: str = Field(default="python:3.11-slim", description="Default docker image")
 
 
+class MemoryConfig(BaseModel):
+    """Memory and style persistence settings."""
+
+    enabled: bool = Field(
+        default=True, description="Enable interaction memory and style adaptation"
+    )
+    db_path: str = Field(
+        default=".khaslana/memory.db", description="SQLite database path for memory"
+    )
+    recall_limit: int = Field(
+        default=3, description="Maximum past memories to inject into prompt"
+    )
+
+
 class KhaslanaConfig(BaseModel):
     """Root configuration model."""
 
     llm: LLMConfig = Field(default_factory=LLMConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     debug: bool = Field(default=False, description="Enable debug logging and tracebacks")
     log_level: str = Field(
         default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)"

@@ -229,6 +229,38 @@ User Confirmation (`--yes` or prompt `Apply this fix to <file>?`)
 
 ---
 
+## Data Flow: Memory System & Style Learning
+
+```
+User Query / Command / Accepted Fix
+    │
+    ▼
+CLI Execution (`ask`, `fix`, `feedback`)
+    │
+    ├─ Semantic Recall:
+    │    Embed incoming query → Vector similarity search in SQLite `queries`
+    │    Retrieve top-k relevant past interactions
+    │
+    ├─ Style Profile Loading:
+    │    Load cached `StyleProfile` (or learn via AST analysis over codebase)
+    │    Inject formatting, naming conventions, docstring patterns into system prompt
+    │
+    ▼
+LLM Prompt Assembly with Style & Relevant Historical Context
+    │
+    ▼
+LLM Generation / Stream
+    │
+    ▼
+Persistence:
+    ├─ Save query + response + query embedding into SQLite `queries`
+    ├─ On `khaslana fix`: record proposal, diff, test results, accepted flag
+    ├─ On `khaslana feedback good|bad`: record feedback rating against interaction ID
+    └─ On accepted patches: refine `StyleLearner` rule weights
+```
+
+---
+
 ## Configuration Precedence
 
 ```
@@ -254,7 +286,8 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 | 4     | Agent System              | ✅ Done        |
 | 5     | Git Integration           | ✅ Done        |
 | 6     | Sandbox Execution         | ✅ Done        |
-| 7     | Memory System             | 🔲 TODO        |
+| 7     | Memory System             | ✅ Done        |
 | 8     | Background Indexing       | 🔲 TODO        |
 | 9     | Plugin System             | 🔲 TODO        |
 | 10    | TUI                       | 🔲 TODO        |
+

@@ -83,3 +83,17 @@ This file tracks all key architectural and implementation decisions made during 
   3. Self-correcting loop: run tests in the sandbox, feed stdout/stderr back into the LLM on failure for up to N attempts, and apply the final fix to the user's real file only upon user confirmation (`--yes` to auto-apply).
   4. Provide `SandboxUnavailableError` for graceful degradation when Docker is unavailable or not running, and support `FakeSandboxRunner` for deterministic testing.
 - **Consequences:** Safe, isolated code verification with zero risk of working tree corruption during repair attempts.
+
+---
+
+## ADR 009: SQLite Interaction Memory, Cosine Semantic Recall, and AST Style Learner
+
+- **Status:** Accepted
+- **Context:** An AI developer tool should become more helpful over time by remembering past interactions, incorporating user feedback, and adhering to the project's coding conventions without requiring manual style prompt engineering.
+- **Decision:**
+  1. Store interaction histories (`queries`, `fixes`, `feedback`, `style_profile`) in local SQLite (`.khaslana/memory.db`). Embed interaction queries using the shared embedding provider and serialize vectors as JSON blobs.
+  2. Implement semantic recall using exact cosine similarity over historical interaction embeddings. On `khaslana ask`, query embeddings retrieve the most relevant past questions and answers within a configurable similarity threshold.
+  3. Implement `StyleLearner` using AST inspection over python files (extracting function naming conventions, typing annotation discipline, docstring presence/formats, and framework patterns like FastAPI/Flask route decorators) and refine style weights when user patches are accepted.
+  4. Ensure complete user data sovereignty: provide `memory list`, `memory search <query>`, `memory forget <id>`, `memory clear [--yes]`, `memory export [--out]`, and `--no-memory` flag to bypass memory storage and retrieval.
+- **Consequences:** Contextual continuity and codebase-aligned style guidance while guaranteeing local-only storage and privacy.
+

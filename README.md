@@ -98,9 +98,22 @@ khaslana commit-msg
 # 9. Sandbox execution & self-correcting fix loop
 khaslana fix src/utils.py --test-cmd "pytest tests/test_utils.py"
 khaslana fix src/api.py --max-attempts 3 --yes
+
+# 10. Memory system & coding style
+khaslana ask "how do I write API endpoints?"              # Injects style profile & past answers
+khaslana ask "how do I write API endpoints?" --no-memory   # Bypass memory injection & logging
+khaslana feedback good                                     # Record positive feedback on last response
+khaslana feedback bad --id <query-id>                      # Rate specific past interaction
+khaslana memory list                                       # Inspect past queries & recorded fixes
+khaslana memory search "database connection"               # Semantic recall search over past interactions
+khaslana memory profile                                    # View codebase AST style rules & patterns
+khaslana memory forget <id>                                # Delete specific interaction from memory
+khaslana memory clear --yes                                # Erase all local memory data
+khaslana memory export --out memory_backup.json            # Export interaction history to JSON
 ```
 
 ---
+
 
 ## Configuration
 

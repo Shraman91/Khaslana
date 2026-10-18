@@ -27,6 +27,7 @@ from khaslana.agents.factory import create_agent_tool_registry
 from khaslana.agents.loop import AgentLoop
 from khaslana.cli.config_cmd import config_app
 from khaslana.cli.doctor import run_doctor
+from khaslana.cli.memory_cmd import feedback_app, memory_app
 from khaslana.core.config import load_config
 from khaslana.core.errors import KhaslanaError
 from khaslana.core.llm import ChatMessage, LLMRouter
@@ -34,6 +35,8 @@ from khaslana.core.logging import setup_logging
 from khaslana.core.prompts import EXPLAIN_PROMPT_TEMPLATE, SYSTEM_PROMPT
 from khaslana.intelligence.callgraph import CallGraph
 from khaslana.intelligence.symbols import SymbolTable
+from khaslana.memory.store import MemoryStore
+from khaslana.memory.style import StyleLearner
 
 # Retrieval imports
 from khaslana.retrieval.chunker import CodeChunker
@@ -56,6 +59,8 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(config_app, name="config")
+app.add_typer(memory_app, name="memory")
+app.add_typer(feedback_app, name="feedback")
 console = Console()
 
 
@@ -141,8 +146,11 @@ def ask(
     ] = None,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
     skip_rag: Annotated[bool, typer.Option("--no-rag", help="Skip retrieval augmentation")] = False,
+    no_memory: Annotated[
+        bool, typer.Option("--no-memory", help="Disable memory recall and persistence")
+    ] = False,
 ) -> None:
-    """Ask Khaslana a technical question with codebase context."""
+    """Ask Khaslana a technical question with codebase context and memory."""
     overrides: dict[str, Any] = {}
     if model:
         overrides.setdefault("llm", {})["model"] = model
@@ -162,11 +170,18 @@ def ask(
         ChatMessage(role="user", content=query),
     ]
 
+    embedder = None
+    memory_store: MemoryStore | None = None
+
     with console.status("[bold green]Preparing context...[/bold green]"):
         try:
-            if not skip_rag and persist_dir.is_dir():
+            embedder = get_embedding_provider(config)
+        except Exception:
+            embedder = None
+
+        try:
+            if not skip_rag and persist_dir.is_dir() and embedder is not None:
                 store = ChromaVectorStore(persist_dir)
-                embedder = get_embedding_provider(config)
                 pipeline = RetrievalPipeline(store, embedder)
 
                 results = pipeline.search(query, top_k=config.retrieval.top_k)
@@ -176,15 +191,57 @@ def ask(
             if config.debug:
                 console.print(f"[yellow]RAG warning:[/yellow] {e}")
 
+        # Inject Memory & Style Profile context
+        if not no_memory and config.memory.enabled:
+            try:
+                memory_store = MemoryStore(
+                    db_path=cwd / config.memory.db_path,
+                    embedding_provider=embedder,
+                )
+                profile = memory_store.load_style_profile()
+                if not profile:
+                    profile = StyleLearner().analyze_codebase(cwd)
+                    memory_store.save_style_profile(profile)
+
+                memories = memory_store.search_interactions(
+                    query, limit=config.memory.recall_limit
+                )
+
+                mem_context_parts = []
+                if profile:
+                    mem_context_parts.append(profile.to_prompt_context())
+                if memories:
+                    mem_context_parts.append(
+                        "### Relevant Past Interactions\n"
+                        + "\n---\n".join(m.snippet for m in memories)
+                    )
+
+                if mem_context_parts:
+                    messages[0].content += "\n\n" + "\n\n".join(mem_context_parts)
+            except Exception as mem_err:
+                if config.debug:
+                    console.print(f"[yellow]Memory warning:[/yellow] {mem_err}")
+
     router = LLMRouter(config)
 
     async def _run() -> None:
         try:
             provider_info = f"{config.llm.provider}/{config.llm.model}"
             console.print(f"[bold blue]Khaslana ({provider_info}):[/bold blue]")
+            full_response_parts: list[str] = []
             async for chunk in router.stream(messages):
+                full_response_parts.append(chunk)
                 console.print(chunk, end="")
             console.print()
+
+            if memory_store and not no_memory and config.memory.enabled:
+                full_response = "".join(full_response_parts)
+                memory_store.record_query(
+                    query_text=query,
+                    response_text=full_response,
+                    model=config.llm.model,
+                    provider=config.llm.provider,
+                )
         except Exception as e:
             _handle_error(e, config.debug)
             raise typer.Exit(code=1) from e
@@ -915,6 +972,32 @@ def fix_code(
                     )
                 else:
                     console.print("[yellow]Fix discarded. Working tree untouched.[/yellow]")
+
+                # Record fix in MemoryStore
+                if config.memory.enabled:
+                    try:
+                        mem_store = MemoryStore(project_root / config.memory.db_path)
+                        fix_rec = mem_store.record_fix(
+                            file_path=rel_path.as_posix(),
+                            original_code=target_file.read_text(encoding="utf-8"),
+                            fixed_code=session.final_code,
+                            diff=session.final_diff or "",
+                            status="accepted" if apply_fix else "rejected",
+                            test_cmd=test_cmd,
+                            attempts_count=len(session.attempts),
+                        )
+                        if apply_fix:
+                            cur_prof = (
+                                mem_store.load_style_profile()
+                                or StyleLearner().analyze_codebase(project_root)
+                            )
+                            updated = StyleLearner().update_from_accepted_fix(fix_rec, cur_prof)
+                            mem_store.save_style_profile(updated)
+                    except Exception as mem_e:
+                        if config.debug:
+                            console.print(
+                                f"[dim yellow]Memory fix record warning: {mem_e}[/dim yellow]"
+                            )
             else:
                 console.print(
                     f"[bold red]✗ Could not fix {rel_path.as_posix()} "
