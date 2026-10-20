@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
-import pathspec
+try:
+    import pathspec
+except ImportError:
+    pathspec = None  # type: ignore[assignment]
 from pydantic import BaseModel
 
 from khaslana.intelligence.callgraph import CallGraph
@@ -121,7 +126,7 @@ def is_binary_file(file_path: Path) -> bool:
         return True
 
 
-def load_gitignore_spec(root_dir: Path) -> pathspec.PathSpec:
+def load_gitignore_spec(root_dir: Path) -> Any:
     """Load .gitignore from project root combined with DEFAULT_IGNORES."""
     patterns = list(DEFAULT_IGNORES)
     gitignore_path = root_dir / ".gitignore"
@@ -134,7 +139,27 @@ def load_gitignore_spec(root_dir: Path) -> pathspec.PathSpec:
                         patterns.append(line)
         except Exception:
             pass
-    return pathspec.PathSpec.from_lines("gitignore", patterns)
+    if pathspec is not None:
+        return pathspec.PathSpec.from_lines("gitignore", patterns)
+
+    class _FallbackGitignoreSpec:
+        def __init__(self, raw_patterns: list[str]) -> None:
+            self.patterns = raw_patterns
+
+        def match_file(self, file_path: str) -> bool:
+            norm = file_path.replace("\\", "/").lstrip("./")
+            name = Path(norm).name
+            for p in self.patterns:
+                p_clean = p.strip("/").rstrip("/*")
+                if (
+                    fnmatch.fnmatch(norm, p)
+                    or fnmatch.fnmatch(name, p_clean)
+                    or fnmatch.fnmatch(norm, f"*{p_clean}*")
+                ):
+                    return True
+            return False
+
+    return _FallbackGitignoreSpec(patterns)
 
 
 class Indexer:

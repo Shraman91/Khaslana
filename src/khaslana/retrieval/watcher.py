@@ -100,8 +100,8 @@ class IncrementalUpdater:
             return True
 
         if is_dir:
-            return self.spec.match_file(f"{rel_path}/")
-        return self.spec.match_file(rel_path)
+            return bool(self.spec.match_file(f"{rel_path}/"))
+        return bool(self.spec.match_file(rel_path))
 
 
     def update_file(self, full_path: Path) -> bool:
