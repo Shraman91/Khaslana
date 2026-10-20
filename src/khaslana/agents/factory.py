@@ -8,6 +8,7 @@ from pathlib import Path
 from khaslana.core.config import KhaslanaConfig
 from khaslana.intelligence.callgraph import CallGraph
 from khaslana.intelligence.symbols import SymbolTable
+from khaslana.plugins.loader import PluginLoader
 from khaslana.retrieval.bm25 import BM25Index
 from khaslana.retrieval.embeddings import get_embedding_provider
 from khaslana.retrieval.pipeline import RetrievalPipeline
@@ -76,4 +77,12 @@ def create_agent_tool_registry(
                 pipeline = None
 
     registry.register(SearchCodeTool(pipeline=pipeline, root_dir=root))
+
+    # 4. Plugins (builtins, entrypoints, user config, workspace plugins)
+    try:
+        loader = PluginLoader(local_plugins_dir=root / ".khaslana" / "plugins")
+        loader.register_enabled_tools(registry)
+    except Exception:
+        pass
+
     return registry

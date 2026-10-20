@@ -29,6 +29,7 @@ from khaslana.cli.config_cmd import config_app
 from khaslana.cli.daemon_cmd import daemon_app, watch_cmd
 from khaslana.cli.doctor import run_doctor
 from khaslana.cli.memory_cmd import feedback_app, memory_app
+from khaslana.cli.plugins_cmd import plugins_app
 from khaslana.core.config import load_config
 from khaslana.core.errors import KhaslanaError
 from khaslana.core.llm import ChatMessage, LLMRouter
@@ -64,6 +65,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(memory_app, name="memory")
 app.add_typer(feedback_app, name="feedback")
 app.add_typer(daemon_app, name="daemon")
+app.add_typer(plugins_app, name="plugins")
 app.command("watch")(watch_cmd)
 console = Console()
 

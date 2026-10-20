@@ -112,6 +112,21 @@ This file tracks all key architectural and implementation decisions made during 
      - Deletions & Renames: Handle file removals by purging vector chunks and symbol table rows.
   4. Provide foreground live watching (`khaslana watch`) and background daemon lifecycle (`khaslana daemon start|stop|status`) managed with a JSON PID record (`.khaslana/daemon.pid`), automatic dead PID detection, and clean termination across Windows and POSIX.
   5. Automatically detect index staleness on `khaslana ask` to incrementally update before executing search queries.
-- **Consequences:** Sub-millisecond incremental updates (~28x faster than full re-index) with always-fresh RAG context.
+---
+
+## ADR 011: Dynamic Plugin Architecture, Error Isolation, and Read-Only Builtin Tools
+
+- **Status:** Accepted
+- **Context:** Developers need to extend Khaslana with external tools (databases, container runtimes, custom API endpoints, internal microservices) without modifying Khaslana's core codebase. Plugins must be dynamic, schema-validated, easily toggled, and strictly isolated so a broken plugin cannot crash the CLI.
+- **Decision:**
+  1. Multi-source discovery hierarchy: Built-ins (`db-query`, `docker`, `api-tester`), standard Python entry points (`khaslana.plugins`), user global plugins (`~/.config/khaslana/plugins/`), and repository-local workspace plugins (`.khaslana/plugins/`).
+  2. Isolated dynamic loading: Wrap module importing and class registration in exception traps. Broken files or missing dependencies are converted into `_ErrorPlugin` placeholders that surface diagnostics in CLI tables without crashing the application.
+  3. Flexible extension interfaces: Support both OOP `Plugin` subclasses and lightweight `register(registry: ToolRegistry)` top-level functions for quick script-based plugins.
+  4. Built-in tool security & resilience:
+     - `db-query`: Strictly enforces read-only access by regex-matching against mutating SQL verbs (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, etc.) and opening SQLite connections with `mode=ro`.
+     - `docker`: Read-only container inspection (`list`, `logs`, `inspect`) with graceful failure when Docker daemon is stopped.
+     - `api-tester`: Flexible HTTP client asserting response status codes, measuring latencies, and pretty-formatting JSON payloads.
+  5. Configuration & CLI: Store enabled/disabled states in `~/.config/khaslana/plugins.json` and provide rich management commands (`khaslana plugins list|info|enable|disable`). Automatically inject all enabled plugin tools into the agent loop registry.
+- **Consequences:** Safe, schema-validated tool extensibility with zero risk of cascading failures from third-party plugins.
 
 

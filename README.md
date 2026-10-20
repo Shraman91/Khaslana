@@ -29,12 +29,21 @@ A production-grade, local-first AI developer tool in Python.
   - ReAct agent loop with max-iteration caps, token budgeting, loop detection, and JSON auto-repair.
   - Mutating shell command security with interactive confirmation prompts.
   - Commands: `khaslana debug <error.log>` and `khaslana analyze project`.
-- **Git Integration & Diff-Aware Code Review (Phase 5)**:
-  - Git inspector using GitPython for staged/unstaged/branch diffs, blame, and commit history.
-  - Diff-aware context enrichment: maps touched diff lines to symbol definitions and resolves callers/callees.
-  - Multi-severity code review (`bug`, `security`, `perf`, `style`) with patch generation.
-  - Multi-format output for humans and CI pipelines (`--format rich|json|markdown`).
-  - Commands: `khaslana review --staged` (or `--branch <name>`), `khaslana explain-diff`, and `khaslana commit-msg`.
+- **Background Indexing & Live File Watcher (Phase 8)**:
+  - Watchdog-based file observer with configurable debounce windows (`DebouncedEventHandler`).
+  - SHA-256 content hashing to eliminate unnecessary re-indexing on touch or metadata changes.
+  - Multi-layer incremental synchronization: vector store chunks, AST symbol table, and call graph.
+  - Background daemon lifecycle (`khaslana daemon start|stop|status`) with detached process spawning and PID management.
+  - Automatic index staleness detection and refresh on `khaslana ask`.
+- **Dynamic Plugin System & Built-in Tools (Phase 9)**:
+  - Multi-source plugin discovery: Python entry points (`khaslana.plugins`), user directory (`~/.config/khaslana/plugins/`), and workspace plugins (`.khaslana/plugins/`).
+  - Full error isolation: malformed or failing plugins cannot crash the CLI; bad plugins are captured with actionable error diagnostics.
+  - Built-in tools:
+    - `db-query`: Read-only SQLite inspector rejecting mutating SQL commands (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`).
+    - `docker`: Safe container inspection (`list`, `logs`, `inspect`) with graceful failure when Docker is offline.
+    - `api-tester`: HTTP client with response assertions, latency measurements, and JSON formatting.
+  - CLI management: `khaslana plugins list|info|enable|disable` with runtime state persistence (`plugins.json`).
+  - Full developer tutorial and guide in [`docs/PLUGINS.md`](docs/PLUGINS.md).
 
 ---
 
@@ -117,6 +126,12 @@ khaslana watch --debounce 1.0                              # Custom debounce win
 khaslana daemon start                                      # Start detached background indexing daemon
 khaslana daemon status                                     # Check background daemon PID and uptime
 khaslana daemon stop                                       # Gracefully terminate background indexing daemon
+
+# 12. Plugin management & extension inspection
+khaslana plugins list                                      # List discovered plugins, versions, and tools
+khaslana plugins info db-query                             # Inspect parameters & schemas for plugin tools
+khaslana plugins disable docker                            # Disable a plugin without removing files
+khaslana plugins enable docker                             # Re-enable a plugin
 ```
 
 ---

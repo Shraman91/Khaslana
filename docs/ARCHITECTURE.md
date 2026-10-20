@@ -89,11 +89,16 @@ graph TD
         DF["Fixers\ndeploy/fixers.py"]
     end
 
-    subgraph Plugins["Plugin System"]
-        PL["Loader\nplugins/loader.py"]
-        PE["Example Plugins"]
+    subgraph Plugins["Plugin System (Phase 9)"]
+        PL["Loader & Discovery\nplugins/loader.py"]
+        PM["Base Interface & Models\nplugins/models.py"]
+        DBP["db-query Plugin\nplugins/builtin/db_query.py"]
+        DKP["docker Plugin\nplugins/builtin/docker_tool.py"]
+        ATP["api-tester Plugin\nplugins/builtin/api_tester.py"]
+        UP["User / Workspace Plugins\n~/.config, .khaslana/plugins"]
     end
 
+    Plugins --> Tools
     Tools --> Retrieval
     Tools --> Intelligence
     Agents --> Memory
@@ -298,6 +303,33 @@ Daemon Management (`DaemonManager`)
 
 ---
 
+## Data Flow: Plugin Discovery, Registration & Isolation
+
+```
+Discovery Sources
+  ├─ Built-ins: db-query, docker, api-tester
+  ├─ Python Entry Points: khaslana.plugins
+  ├─ User Directory: ~/.config/khaslana/plugins/
+  └─ Workspace Directory: .khaslana/plugins/
+       │
+       ▼
+PluginLoader (`plugins/loader.py`)
+  ├─ Module Import & Spec Loading (Isolated with try/except)
+  │    └─ Syntax/Import error → captured as `_ErrorPlugin` (no app crash)
+  ├─ Schema Extraction & Tool Registration (`register(registry)`)
+  └─ Toggles Check: read `~/.config/khaslana/plugins.json`
+       │
+       ▼
+ToolRegistry (`tools/base.py`)
+  └─ Active tools registered: db_query, docker_inspect, api_test, custom tools
+       │
+       ▼
+Agent ReAct Loop / CLI Inspection (`khaslana plugins list|info|enable|disable`)
+  └─ Prompt injection with Pydantic JSON schemas → Tool execution with error traps
+```
+
+---
+
 ## Configuration Precedence
 
 ```
@@ -325,7 +357,7 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 | 6     | Sandbox Execution         | ✅ Done        |
 | 7     | Memory System             | ✅ Done        |
 | 8     | Background Indexing       | ✅ Done        |
-| 9     | Plugin System             | 🔲 TODO        |
+| 9     | Plugin System             | ✅ Done        |
 | 10    | TUI                       | 🔲 TODO        |
 
 

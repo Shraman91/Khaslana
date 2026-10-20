@@ -86,3 +86,8 @@ class WatcherError(KhaslanaError):
 class DaemonError(KhaslanaError):
     """Raised when daemon lifecycle operations (start/stop/status) fail."""
 
+
+class PluginError(KhaslanaError):
+    """Raised when plugin loading, registration, or validation fails."""
+
+
