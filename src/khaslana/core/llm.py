@@ -104,8 +104,13 @@ class OllamaClient(LLMClient):
             },
         }
 
+        timeout = httpx.Timeout(
+            self.config.timeout_seconds,
+            connect=15.0,
+            read=max(self.config.timeout_seconds, 120.0),
+        )
         try:
-            async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 res = await client.post(url, json=payload)
                 if res.status_code == 404:
                     raise LLMError(
@@ -145,9 +150,14 @@ class OllamaClient(LLMClient):
             },
         }
 
+        timeout = httpx.Timeout(
+            self.config.timeout_seconds,
+            connect=15.0,
+            read=max(self.config.timeout_seconds, 120.0),
+        )
         try:
             async with (
-                httpx.AsyncClient(timeout=self.config.timeout_seconds) as client,
+                httpx.AsyncClient(timeout=timeout) as client,
                 client.stream("POST", url, json=payload) as response,
             ):
                 if response.status_code != 200:

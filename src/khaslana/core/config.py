@@ -29,7 +29,7 @@ class LLMConfig(BaseModel):
     gemini_api_key: str | None = Field(default=None, description="Google Gemini API key")
     temperature: float = Field(default=0.2, description="Sampling temperature")
     max_tokens: int = Field(default=4096, description="Max response tokens")
-    timeout_seconds: float = Field(default=60.0, description="HTTP request timeout in seconds")
+    timeout_seconds: float = Field(default=120.0, description="HTTP request timeout in seconds")
     max_retries: int = Field(default=2, description="Maximum retries for failed requests")
 
 
