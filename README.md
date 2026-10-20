@@ -6,8 +6,8 @@ A production-grade, local-first AI developer tool in Python.
 
 ## Features
 
-- **Local-First & Multi-Provider LLM Routing**: Primary local Ollama engine with automatic graceful fallback to Google Gemini and OpenAI.
-- **Strict Secret Redaction**: Deterministic regex and Shannon-entropy sanitization prevents leaking credentials or private keys.
+- **Local-First & Multi-Provider LLM Routing**: Primary local Ollama engine (`llama3.2`, `qwen2.5`, etc.) with zero cloud data transmission and automatic graceful fallback to Google Gemini and OpenAI.
+- **Strict Secret Redaction**: Deterministic regex and Shannon-entropy sanitization prevents leaking credentials, tokens, or private keys before prompts leave the system.
 - **RAG & Code Retrieval (Phase 1)**:
   - Structure-aware Python AST chunking (classes, methods, module scopes) and token-bounded line window chunking.
   - Persistent vector store powered by ChromaDB under `.khaslana/index/` with in-memory fallback.
@@ -29,6 +29,22 @@ A production-grade, local-first AI developer tool in Python.
   - ReAct agent loop with max-iteration caps, token budgeting, loop detection, and JSON auto-repair.
   - Mutating shell command security with interactive confirmation prompts.
   - Commands: `khaslana debug <error.log>` and `khaslana analyze project`.
+- **Git Integration & Diff-Aware Code Review (Phase 5)**:
+  - Git inspector using GitPython for staged/unstaged/branch diffs, blame, and commit history.
+  - Diff-aware context enrichment: maps touched diff lines to symbol definitions and resolves callers/callees.
+  - Multi-severity code review (`bug`, `security`, `perf`, `style`) with patch generation.
+  - Multi-format output for humans and CI pipelines (`--format rich|json|markdown`).
+  - Commands: `khaslana review --staged` (or `--branch <name>`), `khaslana explain-diff`, and `khaslana commit-msg`.
+- **Sandbox Execution & Self-Correcting Fix Loop (Phase 6)**:
+  - Ephemeral Docker execution with strict CPU, memory, and timeout bounds (`network_disabled=True`).
+  - Self-correcting loop: applies proposed patches to a sandbox copy, runs tests, and refines iteratively on failure.
+  - Zero risk to working tree: host files are modified only after interactive user confirmation (`--yes`).
+  - Command: `khaslana fix <file> --test-cmd "<command>" [--max-attempts N]`.
+- **Memory System & Style Learning (Phase 7)**:
+  - SQLite interaction storage (`.khaslana/memory.db`) with exact cosine semantic recall of past queries and answers.
+  - AST `StyleLearner` extracts codebase conventions (naming styles, typing annotations, docstrings, route frameworks).
+  - User feedback loop (`khaslana feedback good|bad`) reinforces preferred coding styles.
+  - Complete local data sovereignty: `memory list`, `memory search`, `memory forget`, `memory clear`, and `--no-memory`.
 - **Background Indexing & Live File Watcher (Phase 8)**:
   - Watchdog-based file observer with configurable debounce windows (`DebouncedEventHandler`).
   - SHA-256 content hashing to eliminate unnecessary re-indexing on touch or metadata changes.
@@ -60,14 +76,42 @@ Evaluation harness results across ground-truth codebase queries on the sample re
 
 ---
 
-## Installation
+## Indexing Benchmarks
 
-```bash
-# Using pipx (recommended)
-pipx install .
+Measured on the test codebase (6 files, 14 semantic chunks):
 
-# Or local editable install
+| Index Operation | Latency | Speedup | Notes |
+|---|---|---|---|
+| **Full Repository Index** | `21.25 ms` | `1.0x` | Full AST parse, chunking, and vector generation |
+| **Incremental No-op Scan** | `9.60 ms` | `2.2x` | Rapid SHA-256 hash check over all tracked files |
+| **Single Modified File Update** | `0.74 ms` | **28.7x** | Delta update (re-chunk, re-embed, update Chroma & SQLite) |
+
+---
+
+## Installation & Setup
+
+### Option 1: Local Virtual Environment (Fastest)
+```powershell
+# Clone the repository
+git clone https://github.com/Shraman91/Khaslana.git
+cd Khaslana
+
+# Create virtual environment and install dependencies
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -e .
+```
+
+### Option 2: Global PowerShell Alias
+To make `khaslana` accessible from any folder without re-downloading ML packages:
+```powershell
+Add-Content -Path $PROFILE -Value 'function khaslana { & "c:\path\to\khaslana\.venv\Scripts\khaslana.exe" @args }' -Force
+. $PROFILE
+```
+
+### Option 3: Global Install via `pipx`
+```powershell
+pipx install "c:\path\to\khaslana"
 ```
 
 ---
@@ -89,6 +133,7 @@ khaslana ask "What does the auth system do?"
 
 # 5. Explain specific files in detail
 khaslana explain src/khaslana/retrieval/indexer.py
+khaslana explain --deep src/khaslana/core/llm.py
 
 # 6. Trace symbol definitions and references
 khaslana where-used AuthService
@@ -136,19 +181,24 @@ khaslana plugins enable docker                             # Re-enable a plugin
 
 ---
 
-## Indexing Benchmarks
+## Testing
 
-Measured on the test codebase (6 files, 14 semantic chunks):
+```powershell
+# Run the complete test suite (138 tests)
+pytest
 
-| Index Operation | Latency | Speedup | Notes |
-|---|---|---|---|
-| **Full Repository Index** | `21.25 ms` | `1.0x` | Full AST parse, chunking, and vector generation |
-| **Incremental No-op Scan** | `9.60 ms` | `2.2x` | Rapid SHA-256 hash check over all tracked files |
-| **Single Modified File Update** | `0.74 ms` | **28.7x** | Delta update (re-chunk, re-embed, update Chroma & SQLite) |
+# Run the end-to-end smoke test script across all subsystems
+.\scripts\smoke_test.ps1
+
+# (On Linux / macOS / Bash)
+./scripts/demo.sh
+
+# Run code style and type safety checks
+ruff check src tests
+mypy src tests
+```
 
 ---
-
-
 
 ## Configuration
 
@@ -161,5 +211,13 @@ khaslana config show
 
 # Set custom default provider or model
 khaslana config set llm.provider ollama
-khaslana config set llm.model llama3
+khaslana config set llm.model llama3.2
 ```
+
+---
+
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Full component diagram and subsystem data flows.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): Architectural Decision Records (ADRs 001–011).
+- [`docs/PLUGINS.md`](docs/PLUGINS.md): "Write your own plugin in 5 minutes" tutorial, interfaces, and templates.

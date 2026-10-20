@@ -1,9 +1,11 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
+*.pyd
+
+# Distribution / packaging
 build/
 develop-eggs/
 dist/
@@ -16,9 +18,11 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 .env
@@ -41,5 +45,22 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 
-# Khaslana local data
+# IDEs & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Khaslana local databases, indices, states, and daemons
 .khaslana/
+**/.khaslana/
+*.pid
+daemon.pid
+daemon.log
+memory_backup.json
