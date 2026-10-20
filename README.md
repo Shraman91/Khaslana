@@ -110,9 +110,29 @@ khaslana memory profile                                    # View codebase AST s
 khaslana memory forget <id>                                # Delete specific interaction from memory
 khaslana memory clear --yes                                # Erase all local memory data
 khaslana memory export --out memory_backup.json            # Export interaction history to JSON
+
+# 11. Background indexing & live file watching
+khaslana watch                                             # Live foreground watcher with debounced re-indexing
+khaslana watch --debounce 1.0                              # Custom debounce window (seconds)
+khaslana daemon start                                      # Start detached background indexing daemon
+khaslana daemon status                                     # Check background daemon PID and uptime
+khaslana daemon stop                                       # Gracefully terminate background indexing daemon
 ```
 
 ---
+
+## Indexing Benchmarks
+
+Measured on the test codebase (6 files, 14 semantic chunks):
+
+| Index Operation | Latency | Speedup | Notes |
+|---|---|---|---|
+| **Full Repository Index** | `21.25 ms` | `1.0x` | Full AST parse, chunking, and vector generation |
+| **Incremental No-op Scan** | `9.60 ms` | `2.2x` | Rapid SHA-256 hash check over all tracked files |
+| **Single Modified File Update** | `0.74 ms` | **28.7x** | Delta update (re-chunk, re-embed, update Chroma & SQLite) |
+
+---
+
 
 
 ## Configuration

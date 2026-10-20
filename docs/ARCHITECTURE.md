@@ -261,6 +261,43 @@ Persistence:
 
 ---
 
+## Data Flow: Background Indexing & Live File Watcher
+
+```
+Filesystem Event (Modify / Create / Delete / Move)
+    │
+    ▼
+Watchdog Observer (`retrieval/watcher.py:RepoWatcher`)
+    │
+    ▼
+Debounced Change Handler (`DebouncedEventHandler`)
+    ├─ Filter gitignored & internal paths (.git, .khaslana, __pycache__)
+    ├─ Buffer modified & deleted file paths
+    └─ Debounce timer (default: 0.5s) to coalesce rapid editor save bursts
+    │
+    ▼
+Incremental Updater (`IncrementalUpdater`)
+    ├─ Content Hash Check: SHA-256 vs stored hash in `.khaslana/index_state.json`
+    │    └─ Skip re-indexing if content is identical (e.g. touch/mtime changes)
+    ├─ For modified files:
+    │    ├─ Delete old chunks from Vector Store (`ChromaVectorStore`)
+    │    ├─ Re-parse AST and update SQLite Symbol Table (`SymbolTable`)
+    │    ├─ Re-chunk source code into semantic units (`CodeChunker`)
+    │    └─ Re-embed new chunks and upsert to Vector Store
+    └─ For deleted files:
+         ├─ Delete chunks from Vector Store
+         ├─ Delete symbols, imports, and calls from SQLite Symbol Table
+         └─ Remove record from `.khaslana/index_state.json`
+    │
+    ▼
+Daemon Management (`DaemonManager`)
+    ├─ Runs detached background worker process via `khaslana daemon start`
+    ├─ Persists PID to `.khaslana/daemon.pid` and logs to `.khaslana/daemon.log`
+    └─ Automatically checks staleness and refreshes on `khaslana ask`
+```
+
+---
+
 ## Configuration Precedence
 
 ```
@@ -287,7 +324,8 @@ See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
 | 5     | Git Integration           | ✅ Done        |
 | 6     | Sandbox Execution         | ✅ Done        |
 | 7     | Memory System             | ✅ Done        |
-| 8     | Background Indexing       | 🔲 TODO        |
+| 8     | Background Indexing       | ✅ Done        |
 | 9     | Plugin System             | 🔲 TODO        |
 | 10    | TUI                       | 🔲 TODO        |
+
 

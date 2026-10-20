@@ -77,3 +77,12 @@ class ExecutionTimeoutError(SandboxError):
 
 class MemoryStoreError(KhaslanaError):
     """Raised when memory persistence or recall encounters an error."""
+
+
+class WatcherError(KhaslanaError):
+    """Raised when file watching or incremental indexing encounters an issue."""
+
+
+class DaemonError(KhaslanaError):
+    """Raised when daemon lifecycle operations (start/stop/status) fail."""
+

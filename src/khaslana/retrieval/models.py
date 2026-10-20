@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -35,3 +36,62 @@ class SearchResult(BaseModel):
     bm25_score: float | None = Field(default=None, description="BM25 keyword score")
     boost: float = Field(default=1.0, description="Priority or recency boost multiplier")
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+INDEX_STATE_FILE = ".khaslana/index_state.json"
+
+
+def compute_file_hash(file_path: Path) -> str:
+    """Compute SHA-256 hex digest of file contents."""
+    import hashlib
+
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        while chunk := f.read(65536):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+class FileRecord(BaseModel):
+    """Metadata tracking a single indexed file."""
+
+    hash: str
+    mtime: float
+    size: int
+
+
+class IndexState(BaseModel):
+    """State record for incremental indexing and stale detection."""
+
+    root_dir: str
+    last_indexed_at: float = 0.0
+    files: dict[str, FileRecord] = Field(default_factory=dict)
+
+    def save(self, state_path: Path) -> None:
+        """Persist index state to disk as formatted JSON."""
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(self.model_dump_json(indent=2), encoding="utf-8")
+
+    @classmethod
+    def load(cls, state_path: Path) -> IndexState | None:
+        """Load index state from disk if available."""
+        import json
+
+        if not state_path.is_file():
+            return None
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            return cls.model_validate(data)
+        except Exception:
+            return None
+
+
+class IncrementalSummary(BaseModel):
+    """Summary of an incremental index update."""
+
+    root_dir: str
+    updated_files: list[str] = Field(default_factory=list)
+    deleted_files: list[str] = Field(default_factory=list)
+    unchanged_files: int = 0
+    elapsed_seconds: float = 0.0
+

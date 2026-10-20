@@ -15,8 +15,9 @@ class SymbolTable:
         self.db_path = str(db_path)
         if self.db_path != ":memory:":
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path)
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+
         self._init_db()
 
     def _init_db(self) -> None:
@@ -233,6 +234,13 @@ class SymbolTable:
         cur = self._conn.execute("SELECT COUNT(*) FROM calls")
         return int(cur.fetchone()[0])
 
+    def delete_file(self, file_path: str) -> None:
+        """Remove all symbols, imports, and caller records associated with a file."""
+        with self._conn:
+            self._conn.execute("DELETE FROM symbols WHERE file = ?", (file_path,))
+            self._conn.execute("DELETE FROM imports WHERE file = ?", (file_path,))
+            self._conn.execute("DELETE FROM calls WHERE caller_file = ?", (file_path,))
+
     def clear(self) -> None:
         with self._conn:
             self._conn.execute("DELETE FROM symbols")
@@ -241,3 +249,4 @@ class SymbolTable:
 
     def close(self) -> None:
         self._conn.close()
+

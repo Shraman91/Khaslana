@@ -32,7 +32,9 @@ dependencies = [
     "structlog>=23.0.0",
     "gitpython>=3.1.0",
     "docker>=7.0.0",
+    "watchdog>=4.0.0",
 ]
+
 
 [project.optional-dependencies]
 dev = [

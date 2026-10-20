@@ -26,6 +26,7 @@ from rich.table import Table
 from khaslana.agents.factory import create_agent_tool_registry
 from khaslana.agents.loop import AgentLoop
 from khaslana.cli.config_cmd import config_app
+from khaslana.cli.daemon_cmd import daemon_app, watch_cmd
 from khaslana.cli.doctor import run_doctor
 from khaslana.cli.memory_cmd import feedback_app, memory_app
 from khaslana.core.config import load_config
@@ -44,6 +45,7 @@ from khaslana.retrieval.embeddings import get_embedding_provider
 from khaslana.retrieval.indexer import Indexer
 from khaslana.retrieval.pipeline import RetrievalPipeline
 from khaslana.retrieval.store import ChromaVectorStore, MemoryVectorStore
+from khaslana.retrieval.watcher import IncrementalUpdater
 from khaslana.sandbox.docker_runner import DockerRunner
 from khaslana.sandbox.fix_loop import SelfCorrectingLoop
 from khaslana.tools.review import (
@@ -61,7 +63,10 @@ app = typer.Typer(
 app.add_typer(config_app, name="config")
 app.add_typer(memory_app, name="memory")
 app.add_typer(feedback_app, name="feedback")
+app.add_typer(daemon_app, name="daemon")
+app.command("watch")(watch_cmd)
 console = Console()
+
 
 
 def _handle_error(e: Exception, debug: bool) -> None:
@@ -182,11 +187,36 @@ def ask(
         try:
             if not skip_rag and persist_dir.is_dir() and embedder is not None:
                 store = ChromaVectorStore(persist_dir)
+                sym_db = cwd / ".khaslana" / "symbols.db"
+                sym_table = SymbolTable(sym_db) if sym_db.is_file() else None
+                chunker = CodeChunker(
+                    target_chunk_tokens=config.retrieval.chunk_size,
+                    overlap_tokens=config.retrieval.chunk_overlap,
+                )
+                updater = IncrementalUpdater(
+                    store=store,
+                    embedder=embedder,
+                    chunker=chunker,
+                    symbol_table=sym_table,
+                    root_dir=cwd,
+                )
+                if updater.is_stale():
+                    summary = updater.scan_and_update_all()
+                    if summary.updated_files or summary.deleted_files:
+                        console.print(
+                            f"[dim]⚡ Index refreshed: {len(summary.updated_files)} updated, "
+                            f"{len(summary.deleted_files)} deleted "
+                            f"in {summary.elapsed_seconds}s[/dim]"
+                        )
+
+
+
                 pipeline = RetrievalPipeline(store, embedder)
 
                 results = pipeline.search(query, top_k=config.retrieval.top_k)
                 if results:
                     messages = pipeline.assemble_context_prompt(query, results, SYSTEM_PROMPT)
+
         except Exception as e:
             if config.debug:
                 console.print(f"[yellow]RAG warning:[/yellow] {e}")

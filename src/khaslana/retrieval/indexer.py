@@ -15,7 +15,13 @@ from khaslana.intelligence.parser import parse_source
 from khaslana.intelligence.symbols import SymbolTable
 from khaslana.retrieval.chunker import CodeChunker
 from khaslana.retrieval.embeddings import EmbeddingProvider
-from khaslana.retrieval.models import Chunk
+from khaslana.retrieval.models import (
+    INDEX_STATE_FILE,
+    Chunk,
+    FileRecord,
+    IndexState,
+    compute_file_hash,
+)
 from khaslana.retrieval.store import VectorStore
 
 DEFAULT_IGNORES = [
@@ -204,6 +210,7 @@ class Indexer:
 
         total_files = len(files_to_process)
         all_chunks: list[Chunk] = []
+        indexed_records: dict[str, FileRecord] = {}
 
         # 2. Chunk files and index symbols
         for i, file_path in enumerate(files_to_process):
@@ -213,7 +220,8 @@ class Indexer:
 
             try:
                 content = file_path.read_text(encoding="utf-8", errors="replace")
-                mtime = file_path.stat().st_mtime
+                stat = file_path.stat()
+                mtime = stat.st_mtime
                 ext = file_path.suffix.lower()
                 lang = EXTENSION_TO_LANGUAGE.get(ext, "plaintext")
 
@@ -231,6 +239,11 @@ class Indexer:
                 if chunks:
                     all_chunks.extend(chunks)
                     summary.indexed_files += 1
+                    indexed_records[rel_path] = FileRecord(
+                        hash=compute_file_hash(file_path),
+                        mtime=mtime,
+                        size=stat.st_size,
+                    )
                 else:
                     summary.skipped_files += 1
             except Exception:
@@ -255,5 +268,17 @@ class Indexer:
                 embeddings = self.embedder.encode(texts)
                 self.store.add_chunks(batch, embeddings)
 
+        # 5. Persist index state
+        try:
+            state = IndexState(
+                root_dir=str(root),
+                last_indexed_at=time.time(),
+                files=indexed_records,
+            )
+            state.save(root / INDEX_STATE_FILE)
+        except Exception:
+            pass
+
         summary.elapsed_seconds = round(time.time() - start_time, 2)
         return summary
+

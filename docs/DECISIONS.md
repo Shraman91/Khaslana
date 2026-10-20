@@ -97,3 +97,21 @@ This file tracks all key architectural and implementation decisions made during 
   4. Ensure complete user data sovereignty: provide `memory list`, `memory search <query>`, `memory forget <id>`, `memory clear [--yes]`, `memory export [--out]`, and `--no-memory` flag to bypass memory storage and retrieval.
 - **Consequences:** Contextual continuity and codebase-aligned style guidance while guaranteeing local-only storage and privacy.
 
+---
+
+## ADR 010: Incremental File Watcher, Content Hashing, and Daemon Lifecycle
+
+- **Status:** Accepted
+- **Context:** Re-indexing an entire repository on every change is expensive, slow, and causes unnecessary GPU/CPU load. The retrieval index must update in near-real-time as developers write, delete, and rename files.
+- **Decision:**
+  1. Use `watchdog.observers.Observer` with thread-safe debouncing (`DebouncedEventHandler`, default 0.5s delay) to coalesce rapid editor save bursts and avoid repeated thrashing.
+  2. Implement content hash validation (`hashlib.sha256`) stored in `.khaslana/index_state.json`. If file mtime changes but content hash remains identical (e.g. editor touch or metadata update), re-indexing is skipped.
+  3. Support incremental multi-layer updates:
+     - Vector Store: Delete previous file chunks and insert newly chunked embeddings.
+     - Symbol Table & Call Graph: Remove old symbol/call records for the touched file and parse updated AST definitions.
+     - Deletions & Renames: Handle file removals by purging vector chunks and symbol table rows.
+  4. Provide foreground live watching (`khaslana watch`) and background daemon lifecycle (`khaslana daemon start|stop|status`) managed with a JSON PID record (`.khaslana/daemon.pid`), automatic dead PID detection, and clean termination across Windows and POSIX.
+  5. Automatically detect index staleness on `khaslana ask` to incrementally update before executing search queries.
+- **Consequences:** Sub-millisecond incremental updates (~28x faster than full re-index) with always-fresh RAG context.
+
+
