@@ -89,6 +89,16 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 mypy_path = "src"
 
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "sentence_transformers.*",
+    "docker.*",
+    "tree_sitter.*",
+    "pathspec.*",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

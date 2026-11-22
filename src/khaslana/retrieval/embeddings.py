@@ -83,7 +83,9 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
     def _load_model(self) -> Any:
         if self._model is None:
             try:
-                from sentence_transformers import SentenceTransformer
+                from sentence_transformers import (
+                    SentenceTransformer,  # type: ignore[import-not-found,import-untyped]
+                )
             except ImportError as exc:
                 from khaslana.core.errors import KhaslanaError
 

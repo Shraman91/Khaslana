@@ -121,8 +121,8 @@ class ChromaVectorStore(VectorStore):
 
     def _init_chroma(self) -> None:
         try:
-            import chromadb
-            from chromadb.config import Settings
+            import chromadb  # type: ignore[import-not-found,import-untyped]
+            from chromadb.config import Settings  # type: ignore[import-not-found,import-untyped]
         except ImportError as exc:
             from khaslana.core.errors import KhaslanaError
 
