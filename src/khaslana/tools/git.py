@@ -133,9 +133,7 @@ class GitInspector:
             files = [b for _, b in matches]
             return sorted(list(set(files)))
 
-    def get_structured_diff(
-        self, staged: bool = False, branch: str | None = None
-    ) -> list[GitDiff]:
+    def get_structured_diff(self, staged: bool = False, branch: str | None = None) -> list[GitDiff]:
         """Parse git diff into structured GitDiff objects with added/deleted line numbers."""
         diff_text = self.get_diff_text(staged=staged, branch=branch)
         if not diff_text.strip():
@@ -168,9 +166,7 @@ class GitInspector:
             deleted_lines: list[tuple[int, str]] = []
 
             # Parse unified diff hunks
-            hunk_regex = re.compile(
-                r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@"
-            )
+            hunk_regex = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
             hunk_parts = hunk_regex.split(chunk)
 
             if len(hunk_parts) > 1:

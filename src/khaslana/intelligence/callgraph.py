@@ -33,9 +33,7 @@ class CallGraph:
 
     def _build_graph(self) -> None:
         """Populate adjacency lists from symbol table calls."""
-        cur = self.symbol_table._conn.execute(
-            "SELECT caller_symbol, callee_name FROM calls"
-        )
+        cur = self.symbol_table._conn.execute("SELECT caller_symbol, callee_name FROM calls")
         for row in cur.fetchall():
             caller = row["caller_symbol"]
             callee = row["callee_name"]
@@ -103,9 +101,7 @@ class CallGraph:
         cycles: list[list[str]] = []
         path: list[str] = []
 
-        all_nodes = set(self._caller_to_callees.keys()).union(
-            set(self._callee_to_callers.keys())
-        )
+        all_nodes = set(self._caller_to_callees.keys()).union(set(self._callee_to_callers.keys()))
 
         def _dfs(node: str) -> None:
             visited[node] = 1

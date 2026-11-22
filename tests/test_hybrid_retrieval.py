@@ -73,9 +73,7 @@ def test_hybrid_ranker_weighted_and_rrf() -> None:
     ranker = HybridRanker(default_semantic_weight=0.5, default_bm25_weight=0.5)
 
     # 1. Weighted fusion
-    weighted_res = ranker.rank(
-        sem_results, bm25_scores, all_chunks, fusion="weighted", top_k=2
-    )
+    weighted_res = ranker.rank(sem_results, bm25_scores, all_chunks, fusion="weighted", top_k=2)
     assert len(weighted_res) == 2
     # c2: (0.5 * 0.4) + (0.5 * 0.95) = 0.2 + 0.475 = 0.675
     # c1: (0.5 * 0.9) + (0.5 * 0.2) = 0.45 + 0.1 = 0.55

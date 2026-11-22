@@ -76,9 +76,7 @@ def test_read_file_tool(tmp_path: Path) -> None:
 
     # Slice read
     slice_res = tool.execute(
-        tool.input_schema.model_validate(
-            {"file_path": "sample.py", "start_line": 2, "end_line": 4}
-        )
+        tool.input_schema.model_validate({"file_path": "sample.py", "start_line": 2, "end_line": 4})
     )
     assert slice_res.ok is True
     assert "2: line 2" in slice_res.output

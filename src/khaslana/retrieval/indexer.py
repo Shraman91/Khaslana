@@ -306,4 +306,3 @@ class Indexer:
 
         summary.elapsed_seconds = round(time.time() - start_time, 2)
         return summary
-

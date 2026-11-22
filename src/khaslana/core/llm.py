@@ -36,9 +36,7 @@ def sanitize_chat_messages(
         if isinstance(m, dict):
             r_str = str(m.get("role", "user"))
             role: Literal["system", "user", "assistant"] = (
-                "system"
-                if r_str == "system"
-                else ("assistant" if r_str == "assistant" else "user")
+                "system" if r_str == "system" else ("assistant" if r_str == "assistant" else "user")
             )
             m = ChatMessage(role=role, content=str(m.get("content", "")))
         redacted_content = redact(m.content)
@@ -277,9 +275,7 @@ class OpenAIClient(LLMClient):
         try:
             async with (
                 httpx.AsyncClient(timeout=self.config.timeout_seconds) as client,
-                client.stream(
-                    "POST", url, headers=self._headers(), json=payload
-                ) as response,
+                client.stream("POST", url, headers=self._headers(), json=payload) as response,
             ):
                 if response.status_code in (401, 403):
                     raise LLMAuthError("Invalid OpenAI API key")
@@ -380,9 +376,7 @@ class GeminiClient(LLMClient):
 class FakeLLM(LLMClient):
     """Deterministic fake LLM for testing without network."""
 
-    def __init__(
-        self, config: LLMConfig | None = None, responses: list[str] | None = None
-    ) -> None:
+    def __init__(self, config: LLMConfig | None = None, responses: list[str] | None = None) -> None:
         super().__init__(config or LLMConfig(provider="fake", model="fake-model"))
         self.responses = list(responses or ["Hello! I am a fake LLM response."])
         self.call_history: list[list[ChatMessage]] = []

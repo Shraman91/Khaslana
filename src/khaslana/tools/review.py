@@ -84,9 +84,7 @@ class CodeReviewer:
             return st, cg
         return None, None
 
-    async def review(
-        self, staged: bool = False, branch: str | None = None
-    ) -> ReviewReport:
+    async def review(self, staged: bool = False, branch: str | None = None) -> ReviewReport:
         """Run a semantic, diff-aware code review against staged changes or a branch."""
         st, cg = self._get_symbols_and_graph()
         enriched = self.git.get_enriched_context(
@@ -147,9 +145,7 @@ class CodeReviewer:
             total_files_analyzed=len(enriched.diffs),
         )
 
-    async def explain_diff(
-        self, staged: bool = False, branch: str | None = None
-    ) -> str:
+    async def explain_diff(self, staged: bool = False, branch: str | None = None) -> str:
         """Provide an architectural explanation of the diff."""
         st, cg = self._get_symbols_and_graph()
         enriched = self.git.get_enriched_context(
@@ -166,9 +162,7 @@ class CodeReviewer:
         if not enriched.diffs or not enriched.raw_diff.strip():
             return f"No diff detected for {target_desc}."
 
-        context_parts = [
-            f"DIFF FOR {target_desc.upper()}:\n```diff\n{enriched.raw_diff}\n```\n"
-        ]
+        context_parts = [f"DIFF FOR {target_desc.upper()}:\n```diff\n{enriched.raw_diff}\n```\n"]
         if enriched.touched_symbols:
             context_parts.append("MODIFIED SYMBOLS CONTEXT:")
             for sym in enriched.touched_symbols:
@@ -177,8 +171,7 @@ class CodeReviewer:
                 callers_str = callers or "None"
                 callees_str = callees or "None"
                 entry = (
-                    f"- {sym.name} in {sym.file} "
-                    f"(Callers: {callers_str}, Callees: {callees_str})"
+                    f"- {sym.name} in {sym.file} (Callers: {callers_str}, Callees: {callees_str})"
                 )
                 context_parts.append(entry)
 

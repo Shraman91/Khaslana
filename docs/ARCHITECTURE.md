@@ -2,7 +2,7 @@
 
 ## Overview
 
-Khaslana is a production-grade, local-first AI developer tool. It is designed to be modular, testable, and extensible — closer to a platform than a script.
+Khaslana is an open-source, local-first AI developer tool built for code understanding, editing, and intelligence with strict privacy boundaries, deterministic sandbox execution, and hybrid retrieval.
 
 ---
 
@@ -18,20 +18,19 @@ graph TD
 
     subgraph Core["Core Services"]
         LLM["LLMRouter\ncore/llm.py"]
-        CFG["Config\ncore/config.py"]
+        CFG["Config (tomllib)\ncore/config.py"]
         LOG["Logging\ncore/logging.py"]
         ERR["Errors\ncore/errors.py"]
-        RED["Redact\ncore/redact.py"]
-        PRO["Prompts\ncore/prompts.py"]
+        RED["Redaction Choke Point\ncore/redact.py"]
+        PRO["Prompts & Delimiters\ncore/prompts.py"]
     end
 
-    LLM -->|"routes via"| OLL["OllamaClient"]
-    LLM -->|"falls back to"| GEM["GeminiClient"]
-    LLM -->|"falls back to"| OAI["OpenAIClient"]
-    LLM --> RED
+    LLM -->|"local (default)"| OLL["OllamaClient"]
+    LLM -->|"explicit opt-in (--allow-cloud)"| CLOUD["Cloud Providers (Gemini / OpenAI)"]
+    LLM -->|"sanitizes all outbound messages"| RED
 
     subgraph Agents["Agent System"]
-        LOOP["AgentLoop\nagents/loop.py"]
+        LOOP["AgentLoop (ReAct)\nagents/loop.py"]
         PLAN["Planner\nagents/planner.py"]
         TR["ToolRouter\nagents/tool_router.py"]
     end
@@ -42,26 +41,26 @@ graph TD
 
     subgraph Tools["Tool Layer"]
         TB["Tool Base Class\ntools/base.py"]
-        RF["read_file"]
-        SC["search_code"]
+        RF["read_file\n(<<<UNTRUSTED>>>)"]
+        SC["search_code\n(<<<UNTRUSTED>>>)"]
         LF["list_files"]
-        RC["run_command"]
-        GT["git tools"]
+        RC["run_command\n(shell=False, allowlist, <<<UNTRUSTED>>>)"]
+        GT["git tools\n(read-only inspection)"]
     end
 
     subgraph Retrieval["RAG / Retrieval"]
         IDX["Indexer\nretrieval/indexer.py"]
         CHK["Chunker\nretrieval/chunker.py"]
-        EMB["Embeddings\nretrieval/embeddings.py"]
-        STO["VectorStore (Chroma)\nretrieval/store.py"]
+        EMB["Embeddings (FastHash / MiniLM)\nretrieval/embeddings.py"]
+        STO["VectorStore (Chroma / Memory)\nretrieval/store.py"]
         BM25["BM25 Index\nretrieval/bm25.py"]
-        RNK["Hybrid Ranker\nretrieval/ranker.py"]
+        RNK["Hybrid Ranker (Weighted / RRF)\nretrieval/ranker.py"]
         WAT["File Watcher\nretrieval/watcher.py"]
     end
 
     subgraph Intelligence["Code Intelligence"]
-        PAR["Parser\nintelligence/parser.py"]
-        SYM["Symbol Table\nintelligence/symbols.py"]
+        PAR["Parser (AST + Tree-Sitter/Regex)\nintelligence/parser.py"]
+        SYM["Symbol Table (SQLite)\nintelligence/symbols.py"]
         CG["Call Graph\nintelligence/callgraph.py"]
     end
 
@@ -71,31 +70,21 @@ graph TD
     end
 
     subgraph Sandbox["Sandbox Execution"]
-        DR["Docker Runner\nsandbox/docker_runner.py"]
+        DR["DockerRunner\nsandbox/docker_runner.py"]
+        LPR["LocalProcessRunner (--no-sandbox)\nsandbox/docker_runner.py"]
     end
 
-    subgraph Merge["Merge Resolution"]
-        MP["Parser\nmerge/parser.py"]
-        MC["Context Builder\nmerge/context.py"]
-        MR["Resolver\nmerge/resolver.py"]
-        MV["Validator\nmerge/validate.py"]
+    subgraph Eval["Benchmark Harness"]
+        EV["khaslana eval\ncli/eval_cmd.py"]
+        DS["Dataset Specs\nbenchmarks/*_repo.json"]
     end
 
-    subgraph Deploy["Deployment Doctor"]
-        DD["Detector\ndeploy/detect.py"]
-        DS["Signatures\ndeploy/signatures.py"]
-        DC["Collectors\ndeploy/collectors.py"]
-        DG["Diagnose\ndeploy/diagnose.py"]
-        DF["Fixers\ndeploy/fixers.py"]
-    end
-
-    subgraph Plugins["Plugin System (Phase 9)"]
+    subgraph Plugins["Plugin System"]
         PL["Loader & Discovery\nplugins/loader.py"]
         PM["Base Interface & Models\nplugins/models.py"]
         DBP["db-query Plugin\nplugins/builtin/db_query.py"]
         DKP["docker Plugin\nplugins/builtin/docker_tool.py"]
         ATP["api-tester Plugin\nplugins/builtin/api_tester.py"]
-        UP["User / Workspace Plugins\n~/.config, .khaslana/plugins"]
     end
 
     Plugins --> Tools
@@ -103,6 +92,7 @@ graph TD
     Tools --> Intelligence
     Agents --> Memory
     Agents --> Core
+    Eval --> Retrieval
 
     style Core fill:#1a1a2e,color:#e0e0e0
     style Agents fill:#16213e,color:#e0e0e0
@@ -121,27 +111,26 @@ User query
 CLI (typer) → validate args, load Config
     │
     ▼
-Redact (sanitize query)
-    │
-    ▼
 Retrieval pipeline
-  ├─ Embed query → vector search (Chroma)
-  ├─ BM25 keyword search
-  └─ Hybrid rank → Top-K chunks (with file:line citations)
+  ├─ Embed query → Vector search (Chroma / Memory fallback)
+  ├─ BM25 sparse keyword search
+  └─ Hybrid rank (Weighted or Reciprocal Rank Fusion) → Top-K chunks
     │
     ▼
-Prompt assembly (chunks + system prompt + user query)
+Prompt assembly (retrieved chunks formatted with passive delimiters + query)
     │
     ▼
-LLMRouter → OllamaClient (primary)
-          → GeminiClient (fallback)
-          → OpenAIClient (fallback)
+LLMClient Choke Point (`LLMClient.chat` / `LLMClient.stream`)
+  └─ Strict Secret Redaction (`core/redact.py`): masks keys, tokens, JWTs, env vars
+    │
+    ▼
+LLMRouter
+  ├─ Local: Ollama (default, 100% private)
+  └─ Cloud: Gemini / OpenAI (BLOCKED by default; requires explicit --allow-cloud)
     │
     ▼
 Streamed output → rich console
 ```
-
----
 
 ---
 
@@ -154,43 +143,23 @@ User Task (e.g. error.log or project analysis)
 CLI → initialize ToolRegistry + ReAct AgentLoop
     │
     ▼
-┌───────────────── ReAct Iteration ──────────────────┐
-│ 1. Assemble prompt with tool schemas + history     │
-│ 2. Planner (LLM) emits JSON Action or Final Answer │
-│ 3. JSON Repair / Parser extracts Action            │
-│ 4. Loop Detection checks for repeated tool calls   │
-│ 5. Tool execution (with confirm for mutating cmds) │
-│ 6. Observation appended to history                 │
-└────────────────────────────────────────────────────┘
+┌─────────────────────── ReAct Iteration ────────────────────────┐
+│ 1. Assemble prompt with tool schemas + history                 │
+│ 2. Planner (LLM) emits JSON Action or Final Answer             │
+│ 3. JSON Repair / Parser extracts Action                        │
+│ 4. Loop Detection checks for repeated tool calls               │
+│ 5. Security & Safety Check:                                    │
+│    - Commands executed with `shell=False`                      │
+│    - Strict read-only allowlist verification                   │
+│    - Shell operators, pipes, redirects, subshells rejected     │
+│    - Mutating commands require interactive prompt or `--yes`   │
+│ 6. Tool execution runs                                         │
+│ 7. Tool output wrapped in `<<<UNTRUSTED_CONTENT>>>` delimiters │
+│ 8. Observation redacted via `redact()` & appended to history   │
+└────────────────────────────────────────────────────────────────┘
     │ (repeated until Final Answer or max iterations)
     ▼
 AgentTrace + Final Answer rendered via Rich Live Panel
-```
-
----
-
-## Data Flow: Git Integration (`khaslana review` / `explain-diff` / `commit-msg`)
-
-```
-Git Working Tree (Staged / Branch / Unstaged)
-    │
-    ▼
-Git Inspector (`tools/git.py`)
-  ├─ Extract diff patches & changed files
-  ├─ Query AST & Symbol Table for changed symbols
-  └─ Resolve callers/callees (Context Enrichment)
-    │
-    ▼
-Prompt Assembly (Diff + Symbol Definitions + Call Graph Context)
-    │
-    ▼
-LLM Router (Ollama / Gemini / OpenAI)
-    │
-    ▼
-Output Formatter:
-  ├─ Rich Interactive Severity Table (bug / security / perf / style)
-  ├─ Structured JSON (--format json)
-  └─ GitHub Markdown (--format markdown)
 ```
 
 ---
@@ -204,10 +173,10 @@ Target File + Test Command
 CLI (`fix` command) → validate file exists
     │
     ▼
-DockerRunner (`sandbox/docker_runner.py`)
-  ├─ Auto-detect container image (e.g. python:3.11-slim, node:20-slim)
-  ├─ Create isolated temporary copy of project directory
-  └─ Verify Docker daemon connectivity (fail gracefully if unavailable)
+Sandbox Guard:
+  ├─ Default: DockerRunner (`sandbox/docker_runner.py`)
+  │    └─ Verifies Docker connectivity. If unavailable -> REFUSES execution.
+  └─ Override: LocalProcessRunner (requires explicit `--no-sandbox` flag)
     │
     ▼
 ┌───────────────── Self-Correcting Fix Loop ─────────────────┐
@@ -218,7 +187,7 @@ DockerRunner (`sandbox/docker_runner.py`)
 │    b. LLM proposes full replacement code                   │
 │    c. Compute unified diff vs original code                │
 │    d. Write fix ONLY to sandbox temp workspace             │
-│    e. Re-run tests in ephemeral container                  │
+│    e. Re-run tests in ephemeral container (network disabled)│
 │    f. If tests pass -> break out of attempt loop           │
 │    g. Else feed new failure back for next attempt          │
 └────────────────────────────────────────────────────────────┘
@@ -227,105 +196,9 @@ DockerRunner (`sandbox/docker_runner.py`)
 Display attempt diffs & test results via Rich syntax panels
     │
     ▼
-User Confirmation (`--yes` or prompt `Apply this fix to <file>?`)
+User Confirmation (`--yes` or interactive prompt `Apply this fix to <file>?`)
   ├─ If approved: write verified code to real file in working tree
   └─ If declined / all attempts fail: working tree left 100% untouched
-```
-
----
-
-## Data Flow: Memory System & Style Learning
-
-```
-User Query / Command / Accepted Fix
-    │
-    ▼
-CLI Execution (`ask`, `fix`, `feedback`)
-    │
-    ├─ Semantic Recall:
-    │    Embed incoming query → Vector similarity search in SQLite `queries`
-    │    Retrieve top-k relevant past interactions
-    │
-    ├─ Style Profile Loading:
-    │    Load cached `StyleProfile` (or learn via AST analysis over codebase)
-    │    Inject formatting, naming conventions, docstring patterns into system prompt
-    │
-    ▼
-LLM Prompt Assembly with Style & Relevant Historical Context
-    │
-    ▼
-LLM Generation / Stream
-    │
-    ▼
-Persistence:
-    ├─ Save query + response + query embedding into SQLite `queries`
-    ├─ On `khaslana fix`: record proposal, diff, test results, accepted flag
-    ├─ On `khaslana feedback good|bad`: record feedback rating against interaction ID
-    └─ On accepted patches: refine `StyleLearner` rule weights
-```
-
----
-
-## Data Flow: Background Indexing & Live File Watcher
-
-```
-Filesystem Event (Modify / Create / Delete / Move)
-    │
-    ▼
-Watchdog Observer (`retrieval/watcher.py:RepoWatcher`)
-    │
-    ▼
-Debounced Change Handler (`DebouncedEventHandler`)
-    ├─ Filter gitignored & internal paths (.git, .khaslana, __pycache__)
-    ├─ Buffer modified & deleted file paths
-    └─ Debounce timer (default: 0.5s) to coalesce rapid editor save bursts
-    │
-    ▼
-Incremental Updater (`IncrementalUpdater`)
-    ├─ Content Hash Check: SHA-256 vs stored hash in `.khaslana/index_state.json`
-    │    └─ Skip re-indexing if content is identical (e.g. touch/mtime changes)
-    ├─ For modified files:
-    │    ├─ Delete old chunks from Vector Store (`ChromaVectorStore`)
-    │    ├─ Re-parse AST and update SQLite Symbol Table (`SymbolTable`)
-    │    ├─ Re-chunk source code into semantic units (`CodeChunker`)
-    │    └─ Re-embed new chunks and upsert to Vector Store
-    └─ For deleted files:
-         ├─ Delete chunks from Vector Store
-         ├─ Delete symbols, imports, and calls from SQLite Symbol Table
-         └─ Remove record from `.khaslana/index_state.json`
-    │
-    ▼
-Daemon Management (`DaemonManager`)
-    ├─ Runs detached background worker process via `khaslana daemon start`
-    ├─ Persists PID to `.khaslana/daemon.pid` and logs to `.khaslana/daemon.log`
-    └─ Automatically checks staleness and refreshes on `khaslana ask`
-```
-
----
-
-## Data Flow: Plugin Discovery, Registration & Isolation
-
-```
-Discovery Sources
-  ├─ Built-ins: db-query, docker, api-tester
-  ├─ Python Entry Points: khaslana.plugins
-  ├─ User Directory: ~/.config/khaslana/plugins/
-  └─ Workspace Directory: .khaslana/plugins/
-       │
-       ▼
-PluginLoader (`plugins/loader.py`)
-  ├─ Module Import & Spec Loading (Isolated with try/except)
-  │    └─ Syntax/Import error → captured as `_ErrorPlugin` (no app crash)
-  ├─ Schema Extraction & Tool Registration (`register(registry)`)
-  └─ Toggles Check: read `~/.config/khaslana/plugins.json`
-       │
-       ▼
-ToolRegistry (`tools/base.py`)
-  └─ Active tools registered: db_query, docker_inspect, api_test, custom tools
-       │
-       ▼
-Agent ReAct Loop / CLI Inspection (`khaslana plugins list|info|enable|disable`)
-  └─ Prompt injection with Pydantic JSON schemas → Tool execution with error traps
 ```
 
 ---
@@ -338,26 +211,8 @@ CLI flags > Environment variables > project .khaslana.toml > ~/.config/khaslana/
 
 ---
 
-## Key Design Decisions
+## Architecture References
 
-See [`DECISIONS.md`](DECISIONS.md) for rationale behind architectural choices.
-
----
-
-## Phase Status
-
-| Phase | Feature                   | Status         |
-|-------|---------------------------|----------------|
-| 0     | Foundation + LLM routing  | ✅ Done        |
-| 1     | RAG System                | ✅ Done        |
-| 2     | Hybrid Retrieval          | ✅ Done        |
-| 3     | Code Intelligence         | ✅ Done        |
-| 4     | Agent System              | ✅ Done        |
-| 5     | Git Integration           | ✅ Done        |
-| 6     | Sandbox Execution         | ✅ Done        |
-| 7     | Memory System             | ✅ Done        |
-| 8     | Background Indexing       | ✅ Done        |
-| 9     | Plugin System             | ✅ Done        |
-| 10    | TUI                       | 🔲 TODO        |
-
-
+- [`PRIVACY.md`](PRIVACY.md): Redaction rules, cloud fallback controls, and sanitization choke point.
+- [`SECURITY.md`](../SECURITY.md): Threat model, shell command allowlist, sandbox isolation, and prompt injection mitigations.
+- [`BENCHMARKS.md`](BENCHMARKS.md): Information retrieval benchmark methodology, metrics, and trade-off analysis.

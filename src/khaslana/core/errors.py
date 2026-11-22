@@ -64,9 +64,7 @@ class SandboxUnavailableError(SandboxError):
     def __init__(
         self,
         message: str = "Docker daemon is not running or Docker is not installed.",
-        hint: str = (
-            "Please install Docker or start Docker Desktop to use sandbox execution."
-        ),
+        hint: str = ("Please install Docker or start Docker Desktop to use sandbox execution."),
     ) -> None:
         super().__init__(message=message, hint=hint)
 
@@ -89,5 +87,3 @@ class DaemonError(KhaslanaError):
 
 class PluginError(KhaslanaError):
     """Raised when plugin loading, registration, or validation fails."""
-
-

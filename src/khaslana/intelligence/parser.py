@@ -451,9 +451,7 @@ def parse_tree_sitter(file_path: str, content: str, language: str) -> ParsedFile
         return None
 
 
-def parse_generic_source(
-    file_path: str, content: str, language: str = "plaintext"
-) -> ParsedFile:
+def parse_generic_source(file_path: str, content: str, language: str = "plaintext") -> ParsedFile:
     """Robust multi-language regex parser handling generics, multi-line signatures, and scopes.
 
     Note: Static analysis resolves call sites syntactically. Dynamic dispatch,
@@ -550,9 +548,7 @@ def parse_generic_source(
     for m in re.finditer(
         r"(?:pub(?:\([^)]+\))?\s+)?\b(struct|trait|enum)\s+([A-Za-z0-9_]+)", content
     ):
-        sym_type: Literal["class", "interface"] = (
-            "interface" if m.group(1) == "trait" else "class"
-        )
+        sym_type: Literal["class", "interface"] = "interface" if m.group(1) == "trait" else "class"
         name = m.group(2)
         start_line = _line_no(content, m.start())
         brace_pos = _find_container_body_brace(content, m.end())
@@ -602,9 +598,7 @@ def parse_generic_source(
         )
 
     # Go type ... struct/interface
-    for m in re.finditer(
-        r"\btype\s+([A-Za-z0-9_]+)(?:\[[^\]]+\])?\s+(struct|interface)", content
-    ):
+    for m in re.finditer(r"\btype\s+([A-Za-z0-9_]+)(?:\[[^\]]+\])?\s+(struct|interface)", content):
         sym_type = "interface" if m.group(2) == "interface" else "class"
         name = m.group(1)
         start_line = _line_no(content, m.start())
@@ -677,9 +671,7 @@ def parse_generic_source(
         start_line = _line_no(content, m.start())
         paren_close = _find_matching_delimiter(content, m.end() - 1, "(", ")")
         brace_pos = (
-            content.find("{", paren_close)
-            if paren_close != -1
-            else content.find("{", m.end())
+            content.find("{", paren_close) if paren_close != -1 else content.find("{", m.end())
         )
         close_idx = _find_matching_delimiter(content, brace_pos) if brace_pos != -1 else -1
         end_line = _line_no(content, close_idx) if close_idx != -1 else start_line
@@ -699,9 +691,7 @@ def parse_generic_source(
         start_line = _line_no(content, m.start())
         paren_close = _find_matching_delimiter(content, m.end() - 1, "(", ")")
         brace_pos = (
-            content.find("{", paren_close)
-            if paren_close != -1
-            else content.find("{", m.end())
+            content.find("{", paren_close) if paren_close != -1 else content.find("{", m.end())
         )
         close_idx = _find_matching_delimiter(content, brace_pos) if brace_pos != -1 else -1
         end_line = _line_no(content, close_idx) if close_idx != -1 else start_line
@@ -733,9 +723,7 @@ def parse_generic_source(
 
         parent = get_parent_scope(m.start())
         parent_name = parent["name"] if parent else None
-        fn_sym_type: Literal["function", "method"] = (
-            "method" if parent_name else "function"
-        )
+        fn_sym_type: Literal["function", "method"] = "method" if parent_name else "function"
         symbols.append(
             Symbol(
                 name=fn_name,
@@ -768,13 +756,9 @@ def parse_generic_source(
                     start_line = _line_no(content, m.start())
                     brace_pos = content.find("{", arrow_pos)
                     close_idx = (
-                        _find_matching_delimiter(content, brace_pos)
-                        if brace_pos != -1
-                        else -1
+                        _find_matching_delimiter(content, brace_pos) if brace_pos != -1 else -1
                     )
-                    end_line = (
-                        _line_no(content, close_idx) if close_idx != -1 else start_line
-                    )
+                    end_line = _line_no(content, close_idx) if close_idx != -1 else start_line
                     symbols.append(
                         Symbol(
                             name=fn_name,
@@ -794,9 +778,7 @@ def parse_generic_source(
         start_line = _line_no(content, m.start())
         paren_close = _find_matching_delimiter(content, m.end() - 1, "(", ")")
         brace_pos = (
-            content.find("{", paren_close)
-            if paren_close != -1
-            else content.find("{", m.end())
+            content.find("{", paren_close) if paren_close != -1 else content.find("{", m.end())
         )
         close_idx = _find_matching_delimiter(content, brace_pos) if brace_pos != -1 else -1
         end_line = _line_no(content, close_idx) if close_idx != -1 else start_line
@@ -863,12 +845,8 @@ def parse_generic_source(
         if parent:
             start_line = _line_no(content, m.start(1))
             brace_pos = content.find("{", m.end() - 1)
-            close_idx = (
-                _find_matching_delimiter(content, brace_pos) if brace_pos != -1 else -1
-            )
-            end_line = (
-                _line_no(content, close_idx) if close_idx != -1 else start_line
-            )
+            close_idx = _find_matching_delimiter(content, brace_pos) if brace_pos != -1 else -1
+            end_line = _line_no(content, close_idx) if close_idx != -1 else start_line
             symbols.append(
                 Symbol(
                     name=name,

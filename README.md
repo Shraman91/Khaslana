@@ -1,94 +1,103 @@
 # Khaslana
 
-A production-grade, local-first AI developer tool in Python.
+[![CI](https://github.com/shraman-deshpande/khaslana/actions/workflows/ci.yml/badge.svg)](https://github.com/shraman-deshpande/khaslana/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#limitations-and-roadmap)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+An open-source, local-first AI developer tool and terminal assistant in Python. Khaslana pairs local LLMs (Ollama) with semantic code search, static call graphs, sandboxed code fixes, and automated debugging while keeping your code private on your machine.
 
 ---
 
-## Features
+## Key Features
 
-- **Local-First & Multi-Provider LLM Routing**: Primary local Ollama engine (`llama3.2`, `qwen2.5`, etc.) with zero cloud data transmission and automatic graceful fallback to Google Gemini and OpenAI.
-- **Strict Secret Redaction**: Deterministic regex and Shannon-entropy sanitization prevents leaking credentials, tokens, or private keys before prompts leave the system.
-- **RAG & Code Retrieval (Phase 1)**:
-  - Structure-aware Python AST chunking (classes, methods, module scopes) and token-bounded line window chunking.
-  - Persistent vector store powered by ChromaDB under `.khaslana/index/` with in-memory fallback.
-  - Pluggable embeddings (`sentence-transformers/all-MiniLM-L6-v2` and fast-hash offline embeddings).
-  - Codebase citations with precise `file.py:start-end` line ranges.
-- **Hybrid Retrieval & Score Fusion (Phase 2)**:
-  - BM25Plus sparse keyword index with code identifier tokenization (camelCase & snake_case sub-token splitting).
-  - Score fusion supporting both Weighted normalization (default 0.6 semantic / 0.4 BM25) and Reciprocal Rank Fusion (`rrf`).
-  - Contextual priority boosts for focused files (`--file`) and git-modified files.
-  - Explainable code search CLI (`khaslana search --explain`) detailing scoring components.
-- **Code Intelligence Layer (Phase 3)**:
-  - Multi-language AST parsing (Python AST + regex support for TypeScript, Go, Rust, Java).
-  - SQLite symbol table with definition lookups, class/method hierarchies, and import edges.
-  - Static call graph with transitive caller/callee resolution, cycle detection, and Mermaid/DOT exports.
-  - Commands: `khaslana where-used <symbol>`, `khaslana graph <symbol>`, and `khaslana explain --deep <file>`.
-- **ReAct Agent System (Phase 4)**:
-  - Extensible `Tool` base class and `ToolRegistry` with strict Pydantic input/output validation.
-  - Core tools: `read_file`, `search_code`, `list_files`, `run_command`, `find_symbol`, `where_used`.
-  - ReAct agent loop with max-iteration caps, token budgeting, loop detection, and JSON auto-repair.
-  - Mutating shell command security with interactive confirmation prompts.
-  - Commands: `khaslana debug <error.log>` and `khaslana analyze project`.
-- **Git Integration & Diff-Aware Code Review (Phase 5)**:
-  - Git inspector using GitPython for staged/unstaged/branch diffs, blame, and commit history.
-  - Diff-aware context enrichment: maps touched diff lines to symbol definitions and resolves callers/callees.
-  - Multi-severity code review (`bug`, `security`, `perf`, `style`) with patch generation.
-  - Multi-format output for humans and CI pipelines (`--format rich|json|markdown`).
-  - Commands: `khaslana review --staged` (or `--branch <name>`), `khaslana explain-diff`, and `khaslana commit-msg`.
-- **Sandbox Execution & Self-Correcting Fix Loop (Phase 6)**:
-  - Ephemeral Docker execution with strict CPU, memory, and timeout bounds (`network_disabled=True`).
-  - Self-correcting loop: applies proposed patches to a sandbox copy, runs tests, and refines iteratively on failure.
-  - Zero risk to working tree: host files are modified only after interactive user confirmation (`--yes`).
-  - Command: `khaslana fix <file> --test-cmd "<command>" [--max-attempts N]`.
-- **Memory System & Style Learning (Phase 7)**:
-  - SQLite interaction storage (`.khaslana/memory.db`) with exact cosine semantic recall of past queries and answers.
-  - AST `StyleLearner` extracts codebase conventions (naming styles, typing annotations, docstrings, route frameworks).
-  - User feedback loop (`khaslana feedback good|bad`) reinforces preferred coding styles.
-  - Complete local data sovereignty: `memory list`, `memory search`, `memory forget`, `memory clear`, and `--no-memory`.
-- **Background Indexing & Live File Watcher (Phase 8)**:
-  - Watchdog-based file observer with configurable debounce windows (`DebouncedEventHandler`).
-  - SHA-256 content hashing to eliminate unnecessary re-indexing on touch or metadata changes.
-  - Multi-layer incremental synchronization: vector store chunks, AST symbol table, and call graph.
-  - Background daemon lifecycle (`khaslana daemon start|stop|status`) with detached process spawning and PID management.
-  - Automatic index staleness detection and refresh on `khaslana ask`.
-- **Dynamic Plugin System & Built-in Tools (Phase 9)**:
-  - Multi-source plugin discovery: Python entry points (`khaslana.plugins`), user directory (`~/.config/khaslana/plugins/`), and workspace plugins (`.khaslana/plugins/`).
-  - Full error isolation: malformed or failing plugins cannot crash the CLI; bad plugins are captured with actionable error diagnostics.
-  - Built-in tools:
-    - `db-query`: Read-only SQLite inspector rejecting mutating SQL commands (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`).
-    - `docker`: Safe container inspection (`list`, `logs`, `inspect`) with graceful failure when Docker is offline.
-    - `api-tester`: HTTP client with response assertions, latency measurements, and JSON formatting.
-  - CLI management: `khaslana plugins list|info|enable|disable` with runtime state persistence (`plugins.json`).
-  - Full developer tutorial and guide in [`docs/PLUGINS.md`](docs/PLUGINS.md).
+- **Local-First & Privacy Boundaries**:
+  - Primary local engine via Ollama (`llama3.2`, `qwen2.5`, `deepseek-r1`) with zero telemetry.
+  - Cloud models (Gemini, OpenAI) are **disabled by default** and strictly blocked unless explicitly requested with `--allow-cloud`.
+  - Secret redaction choke point masks API keys, passwords, and `.env` variables before messages leave the process.
+  - Detailed privacy model in [`docs/PRIVACY.md`](docs/PRIVACY.md).
+- **Hybrid Code Retrieval & Empirical Evaluation**:
+  - AST-aware Python chunking and token-bounded line window chunking.
+  - Dual-mode hybrid search combining dense semantic embeddings with BM25Plus keyword matching.
+  - Choice of score fusion: Weighted combination or Reciprocal Rank Fusion (`rrf`).
+  - Empirical evaluation harness via `khaslana eval` with Recall@1/3/5/10, MRR, and nDCG@10 metrics.
+  - Evaluation details in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+- **Static Code Intelligence**:
+  - Python AST parsing and multi-language support (TypeScript, Go, Rust, Java) via optional `tree-sitter` with regex fallback.
+  - SQLite symbol tables with definition lookups, class/method hierarchies, and import edges.
+  - Static call graph with transitive caller/callee resolution, circular dependency detection, and Mermaid/DOT exports.
+- **ReAct Agent & Shell Safety**:
+  - ReAct agent loop for multi-step diagnosis and code analysis (`khaslana debug`, `khaslana analyze`).
+  - Strict command execution security: `shell=False`, prohibited metacharacters, and strict read-only allowlist.
+  - Untrusted file and command outputs wrapped in `<<<UNTRUSTED_CONTENT>>>` passive delimiters.
+  - Threat model and security policies documented in [`SECURITY.md`](SECURITY.md).
+- **Sandboxed Self-Correcting Fixes (`khaslana fix`)**:
+  - Executes unit tests in ephemeral Docker containers (`network_disabled=True`).
+  - Refuses execution by default if Docker is unavailable unless `--no-sandbox` is passed.
+  - Working tree remains 100% untouched until interactive user approval (`--yes`).
+- **Developer Workflows**:
+  - `khaslana doctor`: Diagnoses system health, Ollama server status, and installed models.
+  - `khaslana config`: View and manage configuration settings hierarchy.
+  - `khaslana review`, `khaslana explain-diff`, `khaslana commit-msg`: Git diff-aware code review and conventional commit generation.
+  - `khaslana daemon` & `khaslana watch`: Live filesystem change observer with incremental debounced re-indexing.
+  - Pluggable extension architecture (`docs/PLUGINS.md`).
 
 ---
 
-## Retrieval Evaluation Benchmark
+## Demo
 
-Evaluation harness results across ground-truth codebase queries on the sample repo:
+```
+$ khaslana ask "Where are user tokens authenticated?"
 
-| Method              | Recall@1 | Recall@3 | Recall@5 |
-|---------------------|----------|----------|----------|
-| Semantic Only       | 0.50     | 0.88     | 1.00     |
-| BM25 Only           | 0.75     | 1.00     | 1.00     |
-| **Hybrid (Weighted)** | **0.75** | **1.00** | **1.00** |
-| Hybrid (RRF)        | 0.62     | 1.00     | 1.00     |
+Retrieving context (Hybrid RRF)...
+- src/auth/service.py:12-45 (AuthService.validate_token)
+- src/api/middleware.py:18-35 (verify_jwt)
 
----
-
-## Indexing Benchmarks
-
-Measured on the test codebase (6 files, 14 semantic chunks):
-
-| Index Operation | Latency | Speedup | Notes |
-|---|---|---|---|
-| **Full Repository Index** | `21.25 ms` | `1.0x` | Full AST parse, chunking, and vector generation |
-| **Incremental No-op Scan** | `9.60 ms` | `2.2x` | Rapid SHA-256 hash check over all tracked files |
-| **Single Modified File Update** | `0.74 ms` | **28.7x** | Delta update (re-chunk, re-embed, update Chroma & SQLite) |
+Khaslana (ollama/llama3.2):
+User tokens are authenticated in `AuthService.validate_token` (src/auth/service.py:12-45),
+which is invoked on every request by `verify_jwt` middleware (src/api/middleware.py:18-35).
+```
 
 ---
 
-## Installation & Setup
+## How It Compares
+
+| Capability / Dimension | Khaslana | Aider | Continue | Claude Code |
+|---|---|---|---|---|
+| **Primary Execution** | Local CLI & terminal | Local CLI git-pairing | IDE extension (VS Code/JetBrains) | Hosted CLI agent |
+| **Privacy by Default** | **Local-only** (Ollama); cloud disabled | BYO API key (cloud-first) | BYO API key (cloud-first) | Cloud-only (Anthropic) |
+| **Retrieval Architecture** | Hybrid (Vector + BM25 + RRF) + Call Graph | Repository map (tree-sitter ctags) | Vector RAG or BM25 index | Server-side grep / glob / file read |
+| **Sandbox Isolation** | **Docker sandbox** with network off | Direct on-host execution | Direct on-host execution | Direct on-host execution |
+| **Code Intelligence** | AST + SQLite symbol table + Call Graph | Tag graph ranking | Basic LSP integration | File exploration tools |
+| **Secret Redaction** | Built-in regex & entropy masking | User responsibility | User responsibility | User responsibility |
+
+### Honest Trade-offs
+- **When Aider is better**: Aider has deeper git integration, whole-repo editing benchmarks, and sophisticated multi-file edit formats optimized for frontier cloud LLMs.
+- **When Continue is better**: Continue offers tight visual IDE integration directly in VS Code and JetBrains editors with inline diff viewers.
+- **When Claude Code is better**: Claude Code leverages Sonnet 3.7 with high agency for sprawling autonomous multi-hour tasks.
+- **When Khaslana is better**: You require strict air-gapped data sovereignty, local Ollama models, sandboxed automated test fixes in Docker, and hybrid retrieval with static call graph inspection.
+
+---
+
+## Limitations and Roadmap
+
+> [!WARNING]
+> **Alpha Status**: Khaslana is currently under active development. Core features are functional and tested, but APIs and CLI flags may evolve before v1.0.
+
+### Current Limitations
+- **Local Model Capacity**: Complex multi-file reasoning depends heavily on the underlying local model. Smaller models (e.g. 7B/8B) may struggle with complex ReAct loops compared to frontier cloud models.
+- **Approximate Call Graphs**: Static call graphs resolve symbols syntactically. Polymorphic dynamic dispatch and runtime monkeypatching are approximate.
+- **Language Support**: Deep AST analysis is native in Python. TypeScript, Go, Rust, and Java support relies on tree-sitter or regex fallback.
+
+### Roadmap
+- [ ] Interactive Textual TUI (`khaslana tui`)
+- [ ] Tree-sitter semantic call graph resolution for C/C++ and Kotlin
+- [ ] Full SWE-bench benchmark harness evaluation
+- [ ] Streaming unified diff viewer directly in the terminal
+
+---
+
+## Installation
 
 ### Lightweight Base Install
 Base Khaslana is lightweight with zero Torch, ChromaDB, or Docker overhead. It runs entirely offline using built-in fast-hash embeddings:
@@ -128,99 +137,41 @@ khaslana doctor
 # 2. Index your repository into the local vector database
 khaslana index .
 
-# 3. Hybrid code search with scoring breakdown
-khaslana search "authenticate user" --explain
-
-# 4. Ask questions about your codebase with retrieved context citations
+# 3. Ask questions about your codebase with retrieved citations
 khaslana ask "What does the auth system do?"
 
-# 5. Explain specific files in detail
-khaslana explain src/khaslana/retrieval/indexer.py
-khaslana explain --deep src/khaslana/core/llm.py
+# 4. Opt-in to cloud fallback when local Ollama is insufficient
+khaslana ask "Complex architecture review" --allow-cloud
 
-# 6. Trace symbol definitions and references
+# 5. Explain specific files or trace call graphs
+khaslana explain --deep src/khaslana/retrieval/indexer.py
 khaslana where-used AuthService
 khaslana graph authenticate_user --format mermaid
+
+# 6. Sandboxed self-correcting fix loop in Docker
+khaslana fix src/utils.py --test-cmd "pytest tests/test_utils.py"
 
 # 7. Agentic debugging and project analysis
 khaslana debug error.log
 khaslana analyze project
 
-# 8. Git review, diff explanation, and conventional commit generation
+# 8. Git review and conventional commit generation
 khaslana review --staged
-khaslana review --branch main --format markdown
-khaslana explain-diff --staged
 khaslana commit-msg
 
-# 9. Sandbox execution & self-correcting fix loop
-khaslana fix src/utils.py --test-cmd "pytest tests/test_utils.py"
-khaslana fix src/api.py --max-attempts 3 --yes
-
-# 10. Memory system & coding style
-khaslana ask "how do I write API endpoints?"              # Injects style profile & past answers
-khaslana ask "how do I write API endpoints?" --no-memory   # Bypass memory injection & logging
-khaslana feedback good                                     # Record positive feedback on last response
-khaslana feedback bad --id <query-id>                      # Rate specific past interaction
-khaslana memory list                                       # Inspect past queries & recorded fixes
-khaslana memory search "database connection"               # Semantic recall search over past interactions
-khaslana memory profile                                    # View codebase AST style rules & patterns
-khaslana memory forget <id>                                # Delete specific interaction from memory
-khaslana memory clear --yes                                # Erase all local memory data
-khaslana memory export --out memory_backup.json            # Export interaction history to JSON
-
-# 11. Background indexing & live file watching
-khaslana watch                                             # Live foreground watcher with debounced re-indexing
-khaslana watch --debounce 1.0                              # Custom debounce window (seconds)
-khaslana daemon start                                      # Start detached background indexing daemon
-khaslana daemon status                                     # Check background daemon PID and uptime
-khaslana daemon stop                                       # Gracefully terminate background indexing daemon
-
-# 12. Plugin management & extension inspection
-khaslana plugins list                                      # List discovered plugins, versions, and tools
-khaslana plugins info db-query                             # Inspect parameters & schemas for plugin tools
-khaslana plugins disable docker                            # Disable a plugin without removing files
-khaslana plugins enable docker                             # Re-enable a plugin
-```
-
----
-
-## Testing
-
-```powershell
-# Run the complete test suite (138 tests)
-pytest
-
-# Run the end-to-end smoke test script across all subsystems
-.\scripts\smoke_test.ps1
-
-# (On Linux / macOS / Bash)
-./scripts/demo.sh
-
-# Run code style and type safety checks
-ruff check src tests
-mypy src tests
-```
-
----
-
-## Configuration
-
-Khaslana follows a strict configuration hierarchy:
-`CLI Flags > Environment Variables > Project .khaslana.toml > ~/.config/khaslana/config.toml > Defaults`
-
-```bash
-# View active configuration
-khaslana config show
-
-# Set custom default provider or model
-khaslana config set llm.provider ollama
-khaslana config set llm.model llama3.2
+# 9. Retrieval evaluation benchmarks
+khaslana eval --dataset benchmarks/python_repo.json
 ```
 
 ---
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Full component diagram and subsystem data flows.
-- [`docs/DECISIONS.md`](docs/DECISIONS.md): Architectural Decision Records (ADRs 001–011).
-- [`docs/PLUGINS.md`](docs/PLUGINS.md): "Write your own plugin in 5 minutes" tutorial, interfaces, and templates.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Component diagrams, subsystems, and data flows.
+- [`docs/PRIVACY.md`](docs/PRIVACY.md): Redaction rules and cloud model isolation.
+- [`SECURITY.md`](SECURITY.md): Threat model, shell command security, and sandbox bounds.
+- [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md): Retrieval benchmark harness and comparative metrics.
+- [`CHANGELOG.md`](CHANGELOG.md): Release history and version notes.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): Local development setup, linting, and testing instructions.
+- [`docs/PLUGINS.md`](docs/PLUGINS.md): Guide to creating custom plugins and tools.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): Architectural Decision Records (ADRs).

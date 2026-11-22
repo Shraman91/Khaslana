@@ -11,9 +11,7 @@ from pydantic import BaseModel, Field
 class Chunk(BaseModel):
     """A semantic chunk of code or text indexed in the system."""
 
-    id: str = Field(
-        description="Unique identifier for chunk (e.g. file_path:start_line-end_line)"
-    )
+    id: str = Field(description="Unique identifier for chunk (e.g. file_path:start_line-end_line)")
     text: str = Field(description="Raw text content of the chunk")
     file: str = Field(description="Repo-relative file path")
     line_range: tuple[int, int] = Field(description="1-based (start_line, end_line)")
@@ -94,4 +92,3 @@ class IncrementalSummary(BaseModel):
     deleted_files: list[str] = Field(default_factory=list)
     unchanged_files: int = 0
     elapsed_seconds: float = 0.0
-

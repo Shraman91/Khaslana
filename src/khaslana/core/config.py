@@ -72,9 +72,7 @@ class MemoryConfig(BaseModel):
     db_path: str = Field(
         default=".khaslana/memory.db", description="SQLite database path for memory"
     )
-    recall_limit: int = Field(
-        default=3, description="Maximum past memories to inject into prompt"
-    )
+    recall_limit: int = Field(default=3, description="Maximum past memories to inject into prompt")
 
 
 class KhaslanaConfig(BaseModel):

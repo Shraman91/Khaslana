@@ -83,9 +83,7 @@ HEX_64_REGEX = re.compile(r"^[0-9a-fA-F]{64}$")
 
 def is_false_positive(token: str) -> bool:
     """Check if token matches safe identifiers like UUIDs or git commit SHAs."""
-    return bool(
-        UUID_REGEX.match(token) or GIT_SHA_REGEX.match(token) or HEX_64_REGEX.match(token)
-    )
+    return bool(UUID_REGEX.match(token) or GIT_SHA_REGEX.match(token) or HEX_64_REGEX.match(token))
 
 
 def is_high_entropy(token: str, min_len: int = 24) -> bool:
@@ -134,9 +132,7 @@ def redact(text: str) -> str:
     def mask_kv(match: re.Match[str]) -> str:
         key_name = match.group(1)
         val = match.group(2)
-        ignored_vals = {
-            "none", "false", "true", "null", "undefined", "changeme", "example", "xxx"
-        }
+        ignored_vals = {"none", "false", "true", "null", "undefined", "changeme", "example", "xxx"}
         if val.lower() in ignored_vals:
             return match.group(0)
         return match.group(0).replace(val, f"[REDACTED:{key_name.upper()}]")

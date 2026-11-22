@@ -113,9 +113,7 @@ class DockerTool(Tool):
                     "image": str(container.image),
                     "created": container.attrs.get("Created"),
                     "state": container.attrs.get("State", {}),
-                    "network_settings": container.attrs.get("NetworkSettings", {}).get(
-                        "Ports", {}
-                    ),
+                    "network_settings": container.attrs.get("NetworkSettings", {}).get("Ports", {}),
                 }
                 return ToolResult(
                     ok=True,

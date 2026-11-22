@@ -26,12 +26,8 @@ class APITesterInput(BaseModel):
     body: dict[str, Any] | str | None = Field(
         default=None, description="Request body payload (JSON dictionary or raw string)"
     )
-    expected_status: int = Field(
-        default=200, description="Expected HTTP response status code"
-    )
-    timeout_seconds: float = Field(
-        default=10.0, description="Request timeout limit in seconds"
-    )
+    expected_status: int = Field(default=200, description="Expected HTTP response status code")
+    timeout_seconds: float = Field(default=10.0, description="Request timeout limit in seconds")
 
 
 class APITesterTool(Tool):

@@ -81,10 +81,7 @@ class StyleLearner:
                     has_return = node.returns is not None
                     annotated_args = sum(1 for arg in node.args.args if arg.annotation is not None)
                     total_args = len(node.args.args)
-                    if (
-                        total_args > 0
-                        and annotated_args == total_args
-                    ) or has_return:
+                    if (total_args > 0 and annotated_args == total_args) or has_return:
                         typed_funcs += 1
 
                     # Docstring analysis
@@ -133,9 +130,7 @@ class StyleLearner:
                 name="Naming",
                 description=naming,
                 pattern_type="naming",
-                confidence=round(
-                    (snake_case_funcs or camel_case_funcs) / max(1, total_funcs), 2
-                ),
+                confidence=round((snake_case_funcs or camel_case_funcs) / max(1, total_funcs), 2),
             )
         )
         rules.append(

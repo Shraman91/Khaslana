@@ -23,7 +23,7 @@ async def check_ollama(url: str) -> tuple[bool, str]:
                 if not models:
                     return True, "Running (0 models found - run `ollama pull llama3`)"
                 names = [m.get("name", "") for m in models[:3]]
-                suffix = f", +{len(models)-3} more" if len(models) > 3 else ""
+                suffix = f", +{len(models) - 3} more" if len(models) > 3 else ""
                 return True, f"Running ({', '.join(names)}{suffix})"
             return False, f"HTTP status {res.status_code}"
     except Exception:

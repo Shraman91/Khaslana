@@ -23,9 +23,7 @@ class DBQueryInput(BaseModel):
     connection_string: str = Field(
         description="Path to SQLite file (e.g., 'app.db' or 'sqlite:///app.db')"
     )
-    query: str = Field(
-        description="Read-only SQL query (SELECT, EXPLAIN, or non-mutating PRAGMA)"
-    )
+    query: str = Field(description="Read-only SQL query (SELECT, EXPLAIN, or non-mutating PRAGMA)")
     max_rows: int = Field(default=50, description="Maximum number of rows to return")
 
 

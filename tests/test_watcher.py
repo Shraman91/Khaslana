@@ -159,9 +159,6 @@ def test_debounced_event_handler(tmp_path: Path) -> None:
     assert "x.py" in updates[0]
 
 
-
-
-
 def test_repo_watcher_start_stop(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

@@ -43,8 +43,6 @@ DAEMON_PID_FILE = ".khaslana/daemon.pid"
 DAEMON_LOG_FILE = ".khaslana/daemon.log"
 
 
-
-
 class IncrementalUpdater:
     """Performs hash-checked incremental updates to vector store and symbol table."""
 
@@ -102,7 +100,6 @@ class IncrementalUpdater:
         if is_dir:
             return bool(self.spec.match_file(f"{rel_path}/"))
         return bool(self.spec.match_file(rel_path))
-
 
     def update_file(self, full_path: Path) -> bool:
         """Incrementally index or re-index a single file if its hash has changed."""
@@ -223,9 +220,6 @@ class IncrementalUpdater:
                 else:
                     summary.unchanged_files += 1
 
-
-
-
         for rel in deleted_rel_paths:
             if self.delete_file(rel):
                 summary.deleted_files.append(rel)
@@ -330,7 +324,6 @@ class IncrementalUpdater:
         return any(rel not in current_disk_files for rel in self.state.files)
 
 
-
 class DebouncedEventHandler(FileSystemEventHandler):
     """Watches filesystem events with thread-safe debouncing."""
 
@@ -352,9 +345,7 @@ class DebouncedEventHandler(FileSystemEventHandler):
 
     def _normalize_path(self, raw_path: bytes | str) -> Path:
         path_str = (
-            raw_path.decode("utf-8", errors="replace")
-            if isinstance(raw_path, bytes)
-            else raw_path
+            raw_path.decode("utf-8", errors="replace") if isinstance(raw_path, bytes) else raw_path
         )
         return Path(path_str)
 
@@ -459,7 +450,6 @@ class DebouncedEventHandler(FileSystemEventHandler):
             self._schedule_flush()
 
 
-
 class RepoWatcher:
     """Manages Watchdog Observer thread for live background file watching."""
 
@@ -559,7 +549,6 @@ class DaemonManager:
         except Exception:
             return None
 
-
     def status(self) -> dict[str, Any]:
         """Check current status of daemon."""
         info = self.get_info()
@@ -629,7 +618,6 @@ class DaemonManager:
         self.pid_file.write_text(json.dumps(info, indent=2), encoding="utf-8")
         return proc.pid
 
-
     def stop(self) -> int:
         """Stop running daemon and clean up PID file."""
         info = self.get_info()
@@ -649,4 +637,3 @@ class DaemonManager:
         terminate_pid(pid)
         self.pid_file.unlink(missing_ok=True)
         return pid
-

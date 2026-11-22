@@ -182,11 +182,7 @@ class DockerRunner(SandboxRunner):
             # Wait for completion or timeout
             try:
                 res = container.wait(timeout=actual_timeout)
-                exit_code = (
-                    int(res.get("StatusCode", -1))
-                    if isinstance(res, dict)
-                    else int(res)
-                )
+                exit_code = int(res.get("StatusCode", -1)) if isinstance(res, dict) else int(res)
             except Exception as wait_exc:
                 timed_out = True
                 with contextlib.suppress(Exception):
@@ -255,12 +251,14 @@ class FakeSandboxRunner(SandboxRunner):
         timeout: int | None = None,
         environment: dict[str, str] | None = None,
     ) -> ExecutionResult:
-        self.invocations.append({
-            "cmd": cmd,
-            "workspace_dir": workspace_dir,
-            "image": image,
-            "timeout": timeout,
-        })
+        self.invocations.append(
+            {
+                "cmd": cmd,
+                "workspace_dir": workspace_dir,
+                "image": image,
+                "timeout": timeout,
+            }
+        )
         if self.canned_results:
             return self.canned_results.pop(0)
 

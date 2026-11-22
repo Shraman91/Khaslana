@@ -427,9 +427,7 @@ class MemoryStore:
     def load_style_profile(self) -> StyleProfile | None:
         """Load stored user style profile if available."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT profile_json FROM style_profile WHERE id = 1"
-            ).fetchone()
+            row = conn.execute("SELECT profile_json FROM style_profile WHERE id = 1").fetchone()
             if row:
                 try:
                     data = json.loads(row["profile_json"])

@@ -19,15 +19,29 @@ from khaslana.retrieval.pipeline import RetrievalPipeline
 from khaslana.tools.base import Tool, ToolResult
 
 # Prohibited shell operators and characters
-PROHIBITED_SHELL_CHARS: set[str] = {
-    "|", ";", "&", ">", "<", "$", "`", "\n", "\r"
-}
+PROHIBITED_SHELL_CHARS: set[str] = {"|", ";", "&", ">", "<", "$", "`", "\n", "\r"}
 
 # Forbidden command wrappers that could execute arbitrary commands
 PROHIBITED_COMMAND_WRAPPERS: set[str] = {
-    "sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh",
-    "cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh", "pwsh.exe",
-    "eval", "exec", "env", "sudo", "doas", "xargs",
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "ksh",
+    "csh",
+    "tcsh",
+    "cmd",
+    "cmd.exe",
+    "powershell",
+    "powershell.exe",
+    "pwsh",
+    "pwsh.exe",
+    "eval",
+    "exec",
+    "env",
+    "sudo",
+    "doas",
+    "xargs",
 }
 
 # Allowed read-only commands and subcommands represented as prefix tuples
@@ -189,17 +203,12 @@ class SearchCodeTool(Tool):
                 c = res.chunk
                 loc = f"{c.file}:{c.line_range[0]}-{c.line_range[1]}"
                 sym = f" [{c.symbol}]" if c.symbol else ""
-                snippet = (
-                    f"--- Result {i}: {loc}{sym} (Score: {res.score:.3f}) ---\n"
-                    f"{c.text}\n"
-                )
+                snippet = f"--- Result {i}: {loc}{sym} (Score: {res.score:.3f}) ---\n{c.text}\n"
                 formatted.append(snippet)
 
             results_str = "\n".join(formatted)
             wrapped = (
-                f"<<<UNTRUSTED_CONTENT:search_code>>>\n"
-                f"{results_str}\n"
-                f"<<<END_UNTRUSTED_CONTENT>>>"
+                f"<<<UNTRUSTED_CONTENT:search_code>>>\n{results_str}\n<<<END_UNTRUSTED_CONTENT>>>"
             )
             return ToolResult(
                 ok=True,
@@ -409,9 +418,7 @@ class RunCommandTool(Tool):
         if argv[0].lower() == "echo":
             out_str = " ".join(argv[1:])
             wrapped = (
-                f"<<<UNTRUSTED_CONTENT:run_command:echo>>>\n"
-                f"{out_str}\n"
-                f"<<<END_UNTRUSTED_CONTENT>>>"
+                f"<<<UNTRUSTED_CONTENT:run_command:echo>>>\n{out_str}\n<<<END_UNTRUSTED_CONTENT>>>"
             )
             return ToolResult(
                 ok=True,

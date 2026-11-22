@@ -234,9 +234,7 @@ class ChromaVectorStore(VectorStore):
         if not data or not data["ids"]:
             return chunks
 
-        for c_id, doc, meta in zip(
-            data["ids"], data["documents"], data["metadatas"], strict=False
-        ):
+        for c_id, doc, meta in zip(data["ids"], data["documents"], data["metadatas"], strict=False):
             raw_callers = meta.get("callers", "[]")
             raw_callees = meta.get("callees", "[]")
             callers = json.loads(raw_callers) if isinstance(raw_callers, str) else []

@@ -138,9 +138,7 @@ def get_embedding_provider(
         return FastHashEmbedding()
 
     model_name = (
-        config.retrieval.embedding_model
-        if config
-        else "sentence-transformers/all-MiniLM-L6-v2"
+        config.retrieval.embedding_model if config else "sentence-transformers/all-MiniLM-L6-v2"
     )
 
     try:

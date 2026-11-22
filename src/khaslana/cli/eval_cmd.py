@@ -56,9 +56,7 @@ def compute_recall_at_k(ranks: list[int | None], k: int) -> float:
     return hits / len(ranks)
 
 
-def compute_ndcg_at_k(
-    hits_binary: list[int], num_ideal_relevant: int = 1, k: int = 10
-) -> float:
+def compute_ndcg_at_k(hits_binary: list[int], num_ideal_relevant: int = 1, k: int = 10) -> float:
     """Compute Normalized Discounted Cumulative Gain at rank k (nDCG@K)."""
     if not hits_binary or num_ideal_relevant <= 0:
         return 0.0
@@ -128,9 +126,7 @@ def evaluate_pipeline_on_dataset(
             elif mode == "bm25":
                 search_results = pipeline.search(query, top_k=top_k, mode="bm25")
             elif mode == "hybrid-rrf":
-                search_results = pipeline.search(
-                    query, top_k=top_k, mode="hybrid", fusion="rrf"
-                )
+                search_results = pipeline.search(query, top_k=top_k, mode="hybrid", fusion="rrf")
             else:  # hybrid-weighted
                 search_results = pipeline.search(
                     query, top_k=top_k, mode="hybrid", fusion="weighted"
@@ -275,8 +271,7 @@ def eval_cmd(
             queries = queries[:limit]
 
         console.print(
-            f"\n[bold blue]=== Evaluating Dataset:[/bold blue] {repo_name} "
-            f"({len(queries)} queries)"
+            f"\n[bold blue]=== Evaluating Dataset:[/bold blue] {repo_name} ({len(queries)} queries)"
         )
 
         target_repo_dir = cache_dir / repo_name

@@ -89,6 +89,11 @@ mypy_path = "src"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "docker: marks tests requiring Docker daemon (deselect with '-m \"not docker\"')",
+    "ollama: marks tests requiring local Ollama server (deselect with '-m \"not ollama\"')",
+    "network: marks tests requiring outbound internet access (deselect with '-m \"not network\"')",
+]
 
 [tool.pyrefly]
 search-path = ["src", "."]

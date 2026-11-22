@@ -245,9 +245,7 @@ def test_where_used_and_graph_cli(tmp_path: Path) -> None:
     assert res_index.exit_code == 0
 
     # Test where-used command
-    res_where = runner.invoke(
-        app, ["where-used", "authenticate_user", "--path", str(sample_copy)]
-    )
+    res_where = runner.invoke(app, ["where-used", "authenticate_user", "--path", str(sample_copy)])
     assert res_where.exit_code == 0
     assert "Definitions" in res_where.output or "References" in res_where.output
 

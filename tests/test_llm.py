@@ -85,7 +85,9 @@ class TestOllamaClient:
     @pytest.mark.asyncio
     @respx.mock
     async def test_chat_connection_error(self, ollama_config: KhaslanaConfig) -> None:
-        respx.post("http://localhost:11434/api/chat").mock(side_effect=httpx.ConnectError("refused"))
+        respx.post("http://localhost:11434/api/chat").mock(
+            side_effect=httpx.ConnectError("refused")
+        )
         client = OllamaClient(ollama_config.llm)
         msgs = [ChatMessage(role="user", content="hello")]
         with pytest.raises(LLMConnectionError):

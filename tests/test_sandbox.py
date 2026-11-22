@@ -69,9 +69,7 @@ Hope this helps!"""
     assert "return a + b" in code
     assert "add(a: int" in code
 
-    json_response = (
-        '{"explanation": "Fixed operator", "fixed_code": "def sub(a, b): return a - b"}'
-    )
+    json_response = '{"explanation": "Fixed operator", "fixed_code": "def sub(a, b): return a - b"}'
     code_j, expl_j = extract_code_fix(json_response)
     assert "return a - b" in code_j
     assert expl_j == "Fixed operator"
@@ -90,9 +88,7 @@ def test_compute_unified_diff() -> None:
 def test_docker_runner_unavailable() -> None:
     """Test DockerRunner raises SandboxUnavailableError with actionable hint when ping fails."""
     mock_client = MagicMock()
-    mock_client.ping.side_effect = Exception(
-        "Connection refused on npipe:////./pipe/docker_engine"
-    )
+    mock_client.ping.side_effect = Exception("Connection refused on npipe:////./pipe/docker_engine")
     runner = DockerRunner(client=mock_client)
     runner._client = None
 
@@ -110,8 +106,8 @@ def test_docker_runner_execution_with_mock(tmp_path: Path) -> None:
     mock_client = MagicMock()
     mock_container = MagicMock()
     mock_container.wait.return_value = {"StatusCode": 0}
-    mock_container.logs.side_effect = (
-        lambda stdout=False, stderr=False: b"Tests passed\n" if stdout else b""
+    mock_container.logs.side_effect = lambda stdout=False, stderr=False: (
+        b"Tests passed\n" if stdout else b""
     )
     mock_client.containers.create.return_value = mock_container
 
@@ -148,9 +144,11 @@ async def test_self_correcting_loop_already_passing(tmp_path: Path) -> None:
     file_path = tmp_path / "math_mod.py"
     file_path.write_text("def mul(a, b): return a * b\n", encoding="utf-8")
 
-    runner = FakeSandboxRunner(canned_results=[
-        ExecutionResult(exit_code=0, stdout="1 passed", stderr="", duration_seconds=0.1)
-    ])
+    runner = FakeSandboxRunner(
+        canned_results=[
+            ExecutionResult(exit_code=0, stdout="1 passed", stderr="", duration_seconds=0.1)
+        ]
+    )
     llm = FakeLLM(responses=[])
 
     loop = SelfCorrectingLoop(

@@ -67,16 +67,8 @@ class HybridRanker:
     ) -> list[SearchResult]:
         """Fuse and rank search results."""
         strategy = fusion or self.default_fusion
-        w_sem = (
-            semantic_weight
-            if semantic_weight is not None
-            else self.default_semantic_weight
-        )
-        w_bm25 = (
-            bm25_weight
-            if bm25_weight is not None
-            else self.default_bm25_weight
-        )
+        w_sem = semantic_weight if semantic_weight is not None else self.default_semantic_weight
+        w_bm25 = bm25_weight if bm25_weight is not None else self.default_bm25_weight
 
         semantic_map = {res.chunk.id: res.score for res in semantic_results}
         all_candidate_ids = set(semantic_map.keys()).union(set(bm25_scores.keys()))
@@ -91,14 +83,10 @@ class HybridRanker:
             k_rrf = 60.0
 
             # Rank positions (1-based)
-            sorted_sem = sorted(
-                semantic_map.items(), key=lambda x: x[1], reverse=True
-            )
+            sorted_sem = sorted(semantic_map.items(), key=lambda x: x[1], reverse=True)
             sem_ranks = {cid: rank + 1 for rank, (cid, _) in enumerate(sorted_sem)}
 
-            sorted_bm25 = sorted(
-                bm25_scores.items(), key=lambda x: x[1], reverse=True
-            )
+            sorted_bm25 = sorted(bm25_scores.items(), key=lambda x: x[1], reverse=True)
             bm25_ranks = {cid: rank + 1 for rank, (cid, _) in enumerate(sorted_bm25)}
 
             for cid in all_candidate_ids:

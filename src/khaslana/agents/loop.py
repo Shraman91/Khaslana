@@ -112,9 +112,7 @@ class AgentLoop:
         start_time = time.time()
         trace = AgentTrace(task=task)
 
-        system_msg = REACT_SYSTEM_PROMPT.format(
-            tools_description=self.tools.get_descriptions()
-        )
+        system_msg = REACT_SYSTEM_PROMPT.format(tools_description=self.tools.get_descriptions())
         messages: list[ChatMessage] = [
             ChatMessage(role="system", content=system_msg),
             ChatMessage(role="user", content=f"Task: {task}"),

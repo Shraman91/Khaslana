@@ -151,9 +151,7 @@ def memory_profile() -> None:
         store.save_style_profile(profile)
 
     panel_content = profile.to_prompt_context()
-    console.print(
-        Panel(panel_content, title="Active Coding Style Profile", border_style="magenta")
-    )
+    console.print(Panel(panel_content, title="Active Coding Style Profile", border_style="magenta"))
 
 
 @feedback_app.command("good")

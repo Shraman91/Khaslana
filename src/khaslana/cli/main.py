@@ -72,7 +72,6 @@ app.command("eval")(eval_cmd)
 console = Console()
 
 
-
 def _handle_error(e: Exception, debug: bool) -> None:
     """Format and print errors gracefully without raw tracebacks unless --debug."""
     if isinstance(e, KhaslanaError):
@@ -221,8 +220,6 @@ def ask(
                             f"in {summary.elapsed_seconds}s[/dim]"
                         )
 
-
-
                 pipeline = RetrievalPipeline(store, embedder)
 
                 results = pipeline.search(query, top_k=config.retrieval.top_k)
@@ -245,9 +242,7 @@ def ask(
                     profile = StyleLearner().analyze_codebase(cwd)
                     memory_store.save_style_profile(profile)
 
-                memories = memory_store.search_interactions(
-                    query, limit=config.memory.recall_limit
-                )
+                memories = memory_store.search_interactions(query, limit=config.memory.recall_limit)
 
                 mem_context_parts = []
                 if profile:
@@ -302,9 +297,7 @@ def explain(
             help="Deep analysis combining symbols, call graph neighbors, and retrieved context",
         ),
     ] = False,
-    model: Annotated[
-        str | None, typer.Option("--model", "-m", help="Override model name")
-    ] = None,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Override model name")] = None,
     provider: Annotated[
         str | None, typer.Option("--provider", "-p", help="Override provider")
     ] = None,
@@ -396,9 +389,7 @@ def explain(
 @app.command("where-used")
 def where_used_cmd(
     symbol_name: Annotated[str, typer.Argument(help="Symbol identifier to search for")],
-    path: Annotated[
-        Path | None, typer.Option("--path", "-p", help="Target project root")
-    ] = None,
+    path: Annotated[Path | None, typer.Option("--path", "-p", help="Target project root")] = None,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
 ) -> None:
     """Find all definitions and call site references for a symbol."""
@@ -464,9 +455,7 @@ def graph_cmd(
     format_type: Annotated[
         str, typer.Option("--format", "-f", help="Output format: mermaid, dot, or text")
     ] = "mermaid",
-    path: Annotated[
-        Path | None, typer.Option("--path", "-p", help="Target project root")
-    ] = None,
+    path: Annotated[Path | None, typer.Option("--path", "-p", help="Target project root")] = None,
     debug: Annotated[bool, typer.Option("--debug", help="Show debug logs")] = False,
 ) -> None:
     """Generate caller/callee call graph around a symbol."""
@@ -545,9 +534,7 @@ def search_cmd(
         embedder = get_embedding_provider(config)
         pipeline = RetrievalPipeline(store, embedder)
 
-        fusion_mode: Literal["weighted", "rrf"] = (
-            "rrf" if fusion.lower() == "rrf" else "weighted"
-        )
+        fusion_mode: Literal["weighted", "rrf"] = "rrf" if fusion.lower() == "rrf" else "weighted"
         results = pipeline.search(
             query=query,
             top_k=top_k,
@@ -559,9 +546,7 @@ def search_cmd(
             console.print(f"[yellow]No matching code found for query:[/yellow] {query}")
             return
 
-        console.print(
-            f"\n[bold green]Found {len(results)} matches for:[/bold green] \"{query}\"\n"
-        )
+        console.print(f'\n[bold green]Found {len(results)} matches for:[/bold green] "{query}"\n')
 
         if explain:
             table = Table(title="Search Results & Score Breakdown", show_header=True)
@@ -779,9 +764,7 @@ def analyze_cmd(
 
 @app.command("review")
 def review_cmd(
-    staged: Annotated[
-        bool, typer.Option("--staged", help="Review staged changes")
-    ] = False,
+    staged: Annotated[bool, typer.Option("--staged", help="Review staged changes")] = False,
     branch: Annotated[
         str | None, typer.Option("--branch", "-b", help="Review changes against branch")
     ] = None,
@@ -842,9 +825,7 @@ def review_cmd(
 
 @app.command("explain-diff")
 def explain_diff_cmd(
-    staged: Annotated[
-        bool, typer.Option("--staged", help="Explain staged changes")
-    ] = False,
+    staged: Annotated[bool, typer.Option("--staged", help="Explain staged changes")] = False,
     branch: Annotated[
         str | None, typer.Option("--branch", "-b", help="Explain changes against branch")
     ] = None,
@@ -1057,9 +1038,7 @@ def fix_code(
 
             if not session.attempts:
                 if session.success:
-                    console.print(
-                        "[bold green]✓ Tests already pass! No fix required.[/bold green]"
-                    )
+                    console.print("[bold green]✓ Tests already pass! No fix required.[/bold green]")
                     return
                 console.print("[yellow]No attempts could be made.[/yellow]")
                 return

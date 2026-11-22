@@ -43,7 +43,6 @@ def daemon_start(
                 title="Daemon Started",
                 border_style="green",
             )
-
         )
     except DaemonError as e:
         console.print(f"[bold yellow]Daemon error:[/bold yellow] {e}")
@@ -137,7 +136,6 @@ def watch_cmd(
                     f"deleted {len(initial_summary.deleted_files)} files in "
                     f"{initial_summary.elapsed_seconds}s[/green]\n"
                 )
-
 
     def _on_change(summary: IncrementalSummary) -> None:
         if summary.updated_files or summary.deleted_files:

@@ -62,9 +62,7 @@ class SymbolTable:
             )
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_sym_name ON symbols(name);")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_sym_file ON symbols(file);")
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_calls_callee ON calls(callee_name);"
-            )
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_callee ON calls(callee_name);")
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_calls_caller ON calls(caller_symbol);"
             )
@@ -249,4 +247,3 @@ class SymbolTable:
 
     def close(self) -> None:
         self._conn.close()
-
