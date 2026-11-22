@@ -120,8 +120,19 @@ class ChromaVectorStore(VectorStore):
         self._init_chroma()
 
     def _init_chroma(self) -> None:
-        import chromadb
-        from chromadb.config import Settings
+        try:
+            import chromadb
+            from chromadb.config import Settings
+        except ImportError as exc:
+            from khaslana.core.errors import KhaslanaError
+
+            raise KhaslanaError(
+                message="ChromaDB is not installed.",
+                hint=(
+                    "Install with 'pip install \"khaslana[embeddings]\"' "
+                    "or use '--memory' for ephemeral in-memory storage."
+                ),
+            ) from exc
 
         self._client = chromadb.PersistentClient(
             path=str(self.persist_dir),

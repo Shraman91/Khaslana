@@ -84,9 +84,25 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
         if self._model is None:
             try:
                 from sentence_transformers import SentenceTransformer
+            except ImportError as exc:
+                from khaslana.core.errors import KhaslanaError
 
+                raise KhaslanaError(
+                    message="sentence-transformers is not installed.",
+                    hint=(
+                        "Install with 'pip install \"khaslana[embeddings]\"' "
+                        "or use fast-hash offline embeddings."
+                    ),
+                ) from exc
+
+            try:
                 self._model = SentenceTransformer(self.model_name)
-                self._dimension = self._model.get_sentence_embedding_dimension() or 384
+                if hasattr(self._model, "get_embedding_dimension"):
+                    self._dimension = self._model.get_embedding_dimension() or 384
+                elif hasattr(self._model, "get_sentence_embedding_dimension"):
+                    self._dimension = self._model.get_sentence_embedding_dimension() or 384
+                else:
+                    self._dimension = 384
             except Exception as e:
                 raise RuntimeError(
                     f"Failed to load sentence-transformers model '{self.model_name}': {e}"

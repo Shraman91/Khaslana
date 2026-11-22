@@ -43,7 +43,17 @@ class DockerTool(Tool):
 
         try:
             import docker  # type: ignore[import-untyped]
+        except ImportError:
+            return ToolResult(
+                ok=False,
+                output="",
+                error=(
+                    "Docker Python SDK is not installed. "
+                    "Install with 'pip install \"khaslana[sandbox]\"'."
+                ),
+            )
 
+        try:
             client = docker.from_env()
             client.ping()
         except Exception as e:

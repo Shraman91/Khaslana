@@ -79,3 +79,39 @@ class TestLoadConfig:
         proj_toml.write_text('[llm]\nmodel = "from_project_file"\n')
         cfg = load_config(project_dir=tmp_path, cli_overrides={"llm": {"model": "from_cli"}})
         assert cfg.llm.model == "from_cli"
+
+
+class TestSaveUserConfig:
+    def test_save_and_load_round_trip(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from khaslana.core.config import save_user_config_value
+
+        cfg_file = tmp_path / "config.toml"
+        monkeypatch.setattr("khaslana.core.config.get_user_config_path", lambda: cfg_file)
+
+        save_user_config_value("llm.model", "qwen2.5-coder")
+        save_user_config_value("llm.temperature", 0.7)
+        save_user_config_value("debug", True)
+
+        assert cfg_file.is_file()
+        loaded = load_config()
+        assert loaded.llm.model == "qwen2.5-coder"
+        assert loaded.llm.temperature == 0.7
+        assert loaded.debug is True
+
+    def test_dumps_toml_formatting(self) -> None:
+        import tomllib
+
+        from khaslana.core.config import dumps_toml
+
+        sample = {
+            "debug": False,
+            "count": 42,
+            "rate": 3.14,
+            "tags": ["alpha", "beta"],
+            "llm": {"provider": "ollama", "model": "llama3.2"},
+        }
+        toml_str = dumps_toml(sample)
+        parsed = tomllib.loads(toml_str)
+        assert parsed == sample

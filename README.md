@@ -90,28 +90,31 @@ Measured on the test codebase (6 files, 14 semantic chunks):
 
 ## Installation & Setup
 
-### Option 1: Local Virtual Environment (Fastest)
+### Lightweight Base Install
+Base Khaslana is lightweight with zero Torch, ChromaDB, or Docker overhead. It runs entirely offline using built-in fast-hash embeddings:
 ```powershell
-# Clone the repository
-git clone https://github.com/Shraman91/Khaslana.git
-cd Khaslana
-
-# Create virtual environment and install dependencies
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
 pip install -e .
 ```
 
-### Option 2: Global PowerShell Alias
-To make `khaslana` accessible from any folder without re-downloading ML packages:
+### Optional Extras
+Install feature extras as needed:
 ```powershell
-Add-Content -Path $PROFILE -Value 'function khaslana { & "c:\path\to\khaslana\.venv\Scripts\khaslana.exe" @args }' -Force
-. $PROFILE
+# Neural embeddings & persistent ChromaDB
+pip install -e ".[embeddings]"
+
+# Docker sandbox execution for safe automated code fixes
+pip install -e ".[sandbox]"
+
+# Tree-sitter AST parsers for TypeScript, Go, Rust, Java
+pip install -e ".[parsers]"
+
+# All optional dependencies
+pip install -e ".[all]"
 ```
 
-### Option 3: Global Install via `pipx`
+### Global CLI Access via `pipx`
 ```powershell
-pipx install "c:\path\to\khaslana"
+pipx install "c:\path\to\khaslana[all]"
 ```
 
 ---

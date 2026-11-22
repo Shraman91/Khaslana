@@ -93,7 +93,13 @@ class DockerRunner(SandboxRunner):
 
         try:
             import docker  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise SandboxUnavailableError(
+                message="Docker Python SDK is not installed.",
+                hint="Install with 'pip install \"khaslana[sandbox]\"' or run with '--no-sandbox'.",
+            ) from exc
 
+        try:
             client = docker.from_env()
             client.ping()
             self._client = client
@@ -103,7 +109,7 @@ class DockerRunner(SandboxRunner):
                 message=f"Docker is not available: {exc}",
                 hint=(
                     "Please install Docker and ensure the Docker daemon / "
-                    "Docker Desktop is running."
+                    "Docker Desktop is running, or run with '--no-sandbox'."
                 ),
             ) from exc
 

@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from khaslana.cli.main import app
@@ -479,7 +480,12 @@ def test_cli_plugins_info_not_found() -> None:
     assert "not found" in result.stdout
 
 
-def test_cli_plugins_disable_and_enable(tmp_path: Path) -> None:
+def test_cli_plugins_disable_and_enable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "khaslana.plugins.loader.PLUGINS_CONFIG_FILE", tmp_path / "plugins.json"
+    )
     runner = CliRunner()
 
     # Test disable

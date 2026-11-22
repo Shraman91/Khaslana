@@ -8,10 +8,10 @@ CLI flags > Environment variables > Project `.khaslana.toml`
 from __future__ import annotations
 
 import os
+import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-import toml
 from pydantic import BaseModel, Field
 
 
@@ -111,6 +111,43 @@ def _deep_update(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]
     return base
 
 
+def dumps_toml(data: dict[str, Any]) -> str:
+    """Serialize a basic dictionary into TOML format without external dependencies."""
+
+    def _format_val(val: Any) -> str:
+        if isinstance(val, bool):
+            return "true" if val else "false"
+        if isinstance(val, (int, float)):
+            return str(val)
+        if isinstance(val, str):
+            escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+            return f'"{escaped}"'
+        if isinstance(val, list):
+            items = ", ".join(_format_val(x) for x in val)
+            return f"[{items}]"
+        return f'"{val}"'
+
+    lines: list[str] = []
+    # Write top-level scalar values first
+    for k, v in data.items():
+        if not isinstance(v, dict):
+            lines.append(f"{k} = {_format_val(v)}")
+
+    # Write tables
+    for section, subdict in data.items():
+        if isinstance(subdict, dict):
+            if lines and lines[-1] != "":
+                lines.append("")
+            lines.append(f"[{section}]")
+            for k, v in subdict.items():
+                if not isinstance(v, dict):
+                    lines.append(f"{k} = {_format_val(v)}")
+                else:
+                    for subk, subv in v.items():
+                        lines.append(f"{k}.{subk} = {_format_val(subv)}")
+    return "\n".join(lines) + "\n"
+
+
 def load_config(
     project_dir: Path | None = None,
     cli_overrides: dict[str, Any] | None = None,
@@ -122,8 +159,8 @@ def load_config(
     user_cfg_path = get_user_config_path()
     if user_cfg_path.is_file():
         try:
-            with open(user_cfg_path, encoding="utf-8") as f:
-                user_data = toml.load(f)
+            with open(user_cfg_path, "rb") as f:
+                user_data = tomllib.load(f)
                 _deep_update(merged, user_data)
         except Exception:
             pass
@@ -132,8 +169,8 @@ def load_config(
     proj_cfg_path = get_project_config_path(project_dir)
     if proj_cfg_path and proj_cfg_path.is_file():
         try:
-            with open(proj_cfg_path, encoding="utf-8") as f:
-                proj_data = toml.load(f)
+            with open(proj_cfg_path, "rb") as f:
+                proj_data = tomllib.load(f)
                 _deep_update(merged, proj_data)
         except Exception:
             pass
@@ -176,8 +213,8 @@ def save_user_config_value(key_path: str, value: Any) -> Path:
     data: dict[str, Any] = {}
     if user_cfg_path.is_file():
         try:
-            with open(user_cfg_path, encoding="utf-8") as f:
-                data = toml.load(f)
+            with open(user_cfg_path, "rb") as f:
+                data = tomllib.load(f)
         except Exception:
             data = {}
 
@@ -188,6 +225,6 @@ def save_user_config_value(key_path: str, value: Any) -> Path:
     target[keys[-1]] = value
 
     with open(user_cfg_path, "w", encoding="utf-8") as f:
-        toml.dump(data, f)
+        f.write(dumps_toml(data))
 
     return user_cfg_path
