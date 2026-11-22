@@ -20,10 +20,10 @@ KNOWN_PATTERNS: list[tuple[str, Pattern[str]]] = [
             re.IGNORECASE,
         ),
     ),
+    # Anthropic keys (checked before OpenAI sk- general prefix)
+    ("ANTHROPIC_KEY", re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,}\b")),
     # OpenAI keys
     ("OPENAI_KEY", re.compile(r"\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_\-]{20,}\b")),
-    # Anthropic keys
-    ("ANTHROPIC_KEY", re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,}\b")),
     # Google API keys
     ("GOOGLE_KEY", re.compile(r"\bAIza[0-9A-Za-z\-_]{30,45}\b")),
     # AWS Access Key ID
@@ -50,7 +50,7 @@ KNOWN_PATTERNS: list[tuple[str, Pattern[str]]] = [
     (
         "KEY_VALUE_SECRET",
         re.compile(
-            r"(?i)\b(api[_-]?key|secret|password|passwd|auth[_-]?token|access[_-]?token|private[_-]?key|client[_-]?secret)\b\s*[:=]\s*['\"]?([A-Za-z0-9_!#$%&*+\-/=?^`{|}~.]{8,})['\"]?",
+            r"(?i)\b([a-z0-9_]*(?:api[_-]?key|secret|password|passwd|auth[_-]?token|access[_-]?token|access[_-]?key|secret[_-]?key|private[_-]?key|client[_-]?secret|signing[_-]?key|webhook[_-]?secret)[a-z0-9_]*)\b\s*[:=]\s*['\"]?([A-Za-z0-9_!#$%&*+\-/=?^`{|}~.]{8,})['\"]?",
         ),
     ),
     # Bearer tokens
@@ -74,9 +74,25 @@ def shannon_entropy(data: str) -> float:
     return entropy
 
 
+UUID_REGEX = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+GIT_SHA_REGEX = re.compile(r"^[0-9a-fA-F]{40}$")
+HEX_64_REGEX = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def is_false_positive(token: str) -> bool:
+    """Check if token matches safe identifiers like UUIDs or git commit SHAs."""
+    return bool(
+        UUID_REGEX.match(token) or GIT_SHA_REGEX.match(token) or HEX_64_REGEX.match(token)
+    )
+
+
 def is_high_entropy(token: str, min_len: int = 24) -> bool:
     """Check if an isolated token appears to be high entropy (random secret / token)."""
     if len(token) < min_len:
+        return False
+    if is_false_positive(token):
         return False
     # Ignore tokens with path separators
     if "/" in token or "\\" in token or ":" in token:
@@ -89,7 +105,7 @@ def is_high_entropy(token: str, min_len: int = 24) -> bool:
     # Hex tokens (0-9a-f) have a maximum theoretical entropy of log2(16) = 4.0.
     # Base64/alphanumeric have higher max theoretical entropy.
     is_hex = bool(re.match(r"^[0-9a-fA-F]+$", token))
-    min_threshold = 3.0 if is_hex else 3.8
+    min_threshold = 3.2 if is_hex else 3.8
 
     return entropy >= min_threshold
 

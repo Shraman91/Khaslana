@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Literal
@@ -22,6 +23,27 @@ from khaslana.core.errors import (
     LLMTimeoutError,
 )
 from khaslana.core.redact import redact
+
+CLOUD_PROVIDERS: set[str] = {"gemini", "openai"}
+
+
+def sanitize_chat_messages(
+    messages: Sequence[ChatMessage | dict[str, Any]],
+) -> list[ChatMessage]:
+    """Convert input messages and redact secrets before any outbound transmission."""
+    safe_messages: list[ChatMessage] = []
+    for m in messages:
+        if isinstance(m, dict):
+            r_str = str(m.get("role", "user"))
+            role: Literal["system", "user", "assistant"] = (
+                "system"
+                if r_str == "system"
+                else ("assistant" if r_str == "assistant" else "user")
+            )
+            m = ChatMessage(role=role, content=str(m.get("content", "")))
+        redacted_content = redact(m.content)
+        safe_messages.append(ChatMessage(role=m.role, content=redacted_content))
+    return safe_messages
 
 
 class ChatMessage(BaseModel):
@@ -42,7 +64,11 @@ class LLMResponse(BaseModel):
 
 
 class LLMClient(ABC):
-    """Abstract base class for all LLM providers."""
+    """Abstract base class for all LLM providers.
+
+    Guarantees that all outbound messages pass through secret redaction
+    as a mandatory choke point before any provider or network dispatch.
+    """
 
     def __init__(self, config: LLMConfig) -> None:
         self.config = config
@@ -53,14 +79,27 @@ class LLMClient(ABC):
         """Return provider identifier."""
         ...
 
+    async def chat(self, messages: Sequence[ChatMessage | dict[str, Any]]) -> LLMResponse:
+        """Sanitize messages and generate a complete chat response."""
+        safe = sanitize_chat_messages(messages)
+        return await self._chat_impl(safe)
+
+    async def stream(
+        self, messages: Sequence[ChatMessage | dict[str, Any]]
+    ) -> AsyncGenerator[str, None]:
+        """Sanitize messages and stream response tokens asynchronously."""
+        safe = sanitize_chat_messages(messages)
+        async for token in self._stream_impl(safe):
+            yield token
+
     @abstractmethod
-    async def chat(self, messages: list[ChatMessage]) -> LLMResponse:
-        """Generate a complete chat response."""
+    async def _chat_impl(self, messages: list[ChatMessage]) -> LLMResponse:
+        """Provider-specific chat implementation receiving strictly redacted messages."""
         ...
 
     @abstractmethod
-    async def stream(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
-        """Stream response tokens asynchronously."""
+    async def _stream_impl(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
+        """Provider-specific stream implementation receiving strictly redacted messages."""
         yield ""
 
     async def generate(self, prompt: str, system: str | None = None) -> str:
@@ -92,7 +131,7 @@ class OllamaClient(LLMClient):
         except Exception:
             return []
 
-    async def chat(self, messages: list[ChatMessage]) -> LLMResponse:
+    async def _chat_impl(self, messages: list[ChatMessage]) -> LLMResponse:
         url = f"{self.config.ollama_url}/api/chat"
         payload = {
             "model": self.config.model,
@@ -138,7 +177,7 @@ class OllamaClient(LLMClient):
         except httpx.HTTPStatusError as e:
             raise LLMError(f"Ollama HTTP error: {e.response.status_code} {e.response.text}") from e
 
-    async def stream(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
+    async def _stream_impl(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
         url = f"{self.config.ollama_url}/api/chat"
         payload = {
             "model": self.config.model,
@@ -195,7 +234,7 @@ class OpenAIClient(LLMClient):
             "Content-Type": "application/json",
         }
 
-    async def chat(self, messages: list[ChatMessage]) -> LLMResponse:
+    async def _chat_impl(self, messages: list[ChatMessage]) -> LLMResponse:
         url = f"{self.config.openai_base_url}/chat/completions"
         payload = {
             "model": self.config.model or "gpt-4o-mini",
@@ -225,7 +264,7 @@ class OpenAIClient(LLMClient):
         except httpx.TimeoutException as e:
             raise LLMTimeoutError("OpenAI request timed out") from e
 
-    async def stream(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
+    async def _stream_impl(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
         url = f"{self.config.openai_base_url}/chat/completions"
         payload = {
             "model": self.config.model or "gpt-4o-mini",
@@ -292,7 +331,7 @@ class GeminiClient(LLMClient):
                 contents.append({"role": role, "parts": [{"text": m.content}]})
         return system_instruction, contents
 
-    async def chat(self, messages: list[ChatMessage]) -> LLMResponse:
+    async def _chat_impl(self, messages: list[ChatMessage]) -> LLMResponse:
         api_key = self._get_api_key()
         model_name = self.config.model if "gemini" in self.config.model else "gemini-1.5-flash"
         base_url = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -330,9 +369,9 @@ class GeminiClient(LLMClient):
         except httpx.TimeoutException as e:
             raise LLMTimeoutError("Gemini request timed out") from e
 
-    async def stream(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
+    async def _stream_impl(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
         # For simplicity and robust fallback, fetch chat and yield tokens
-        resp = await self.chat(messages)
+        resp = await self._chat_impl(messages)
         for chunk in resp.content.split(" "):
             yield chunk + " "
             await asyncio.sleep(0.01)
@@ -355,12 +394,12 @@ class FakeLLM(LLMClient):
     def push_response(self, text: str) -> None:
         self.responses.append(text)
 
-    async def chat(self, messages: list[ChatMessage]) -> LLMResponse:
+    async def _chat_impl(self, messages: list[ChatMessage]) -> LLMResponse:
         self.call_history.append(messages)
         content = self.responses.pop(0) if self.responses else "Default fake answer."
         return LLMResponse(content=content, model="fake-model", provider="fake")
 
-    async def stream(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
+    async def _stream_impl(self, messages: list[ChatMessage]) -> AsyncGenerator[str, None]:
         self.call_history.append(messages)
         content = self.responses.pop(0) if self.responses else "Default fake answer."
         words = content.split(" ")
@@ -409,12 +448,14 @@ class LLMRouter:
         return safe_messages
 
     def _get_provider_chain(self) -> list[str]:
-        """Determine fallback order."""
+        """Determine fallback order respecting privacy configuration."""
         chain = [self.primary_provider]
         fallbacks = ["ollama", "gemini", "openai"]
         for f in fallbacks:
             if f not in chain:
-                # Only add fallbacks if their credentials/setup are potentially present
+                # Disallow cloud fallback unless explicitly permitted
+                if f in CLOUD_PROVIDERS and not self.config.llm.allow_cloud_fallback:
+                    continue
                 if f == "gemini" and not self.config.llm.gemini_api_key:
                     continue
                 if f == "openai" and not self.config.llm.openai_api_key:
@@ -433,6 +474,13 @@ class LLMRouter:
             if not client:
                 continue
 
+            if provider in CLOUD_PROVIDERS and self.primary_provider not in CLOUD_PROVIDERS:
+                sys.stderr.write(
+                    f"\n[Privacy Warning] Local LLM provider '{self.primary_provider}' failed. "
+                    f"Falling back to cloud provider '{provider}'. "
+                    f"Redacted code context will be transmitted to {provider.title()}.\n"
+                )
+
             for attempt in range(self.config.llm.max_retries + 1):
                 try:
                     return await client.chat(safe_msgs)
@@ -446,6 +494,19 @@ class LLMRouter:
                     last_error = e
                     break
 
+        if (
+            self.primary_provider not in CLOUD_PROVIDERS
+            and not self.config.llm.allow_cloud_fallback
+        ):
+            prov = self.primary_provider
+            raise LLMError(
+                f"Local LLM provider '{prov}' failed and cloud fallback is disabled.",
+                hint=(
+                    f"Ensure {prov} is running (e.g. `ollama serve`), or allow cloud "
+                    f"fallback with '--allow-cloud' or `llm.allow_cloud_fallback = true`.\n"
+                    f"Last error: {last_error}"
+                ),
+            )
         raise LLMError(
             f"All LLM providers in chain {chain} failed.",
             hint=f"Last error: {last_error}",
@@ -464,6 +525,13 @@ class LLMRouter:
             if not client:
                 continue
 
+            if provider in CLOUD_PROVIDERS and self.primary_provider not in CLOUD_PROVIDERS:
+                sys.stderr.write(
+                    f"\n[Privacy Warning] Local LLM provider '{self.primary_provider}' failed. "
+                    f"Falling back to cloud provider '{provider}'. "
+                    f"Redacted code context will be transmitted to {provider.title()}.\n"
+                )
+
             try:
                 # Test connectivity by initiating stream
                 stream_gen = client.stream(safe_msgs)
@@ -477,6 +545,19 @@ class LLMRouter:
                 last_error = e
                 continue
 
+        if (
+            self.primary_provider not in CLOUD_PROVIDERS
+            and not self.config.llm.allow_cloud_fallback
+        ):
+            prov = self.primary_provider
+            raise LLMError(
+                f"Local LLM provider '{prov}' failed and cloud fallback is disabled.",
+                hint=(
+                    f"Ensure {prov} is running (e.g. `ollama serve`), or allow cloud "
+                    f"fallback with '--allow-cloud' or `llm.allow_cloud_fallback = true`.\n"
+                    f"Last error: {last_error}"
+                ),
+            )
         raise LLMError(
             f"All LLM streaming providers in chain {chain} failed.",
             hint=f"Last error: {last_error}",

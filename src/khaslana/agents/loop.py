@@ -13,6 +13,7 @@ from rich.text import Text
 from khaslana.agents.models import AgentFinish, AgentStep, AgentTrace
 from khaslana.agents.parser import parse_agent_output
 from khaslana.core.llm import ChatMessage, LLMClient, LLMRouter
+from khaslana.core.redact import redact
 from khaslana.tools.base import ToolRegistry
 
 REACT_SYSTEM_PROMPT = """You are an expert AI software engineering agent.
@@ -207,7 +208,8 @@ class AgentLoop:
 
             # Execute tool
             tool_res = self.tools.execute(action, action_input)
-            obs = tool_res.output if tool_res.ok else f"ERROR: {tool_res.error}"
+            raw_obs = tool_res.output if tool_res.ok else f"ERROR: {tool_res.error}"
+            obs = redact(raw_obs)
 
             if repeat_count >= 2:
                 obs = f"[Warning: Loop detected. You previously ran this exact tool call.]\n{obs}"

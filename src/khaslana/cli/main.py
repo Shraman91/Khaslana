@@ -156,6 +156,12 @@ def ask(
     no_memory: Annotated[
         bool, typer.Option("--no-memory", help="Disable memory recall and persistence")
     ] = False,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
 ) -> None:
     """Ask Khaslana a technical question with codebase context and memory."""
     overrides: dict[str, Any] = {}
@@ -163,6 +169,8 @@ def ask(
         overrides.setdefault("llm", {})["model"] = model
     if provider:
         overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
     if debug:
         overrides["debug"] = True
 
@@ -299,6 +307,12 @@ def explain(
         str | None, typer.Option("--provider", "-p", help="Override provider")
     ] = None,
     debug: Annotated[bool, typer.Option("--debug", help="Show debug logs")] = False,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
 ) -> None:
     """Analyze and explain a code file in detail."""
     if not file_path.is_file():
@@ -316,6 +330,8 @@ def explain(
         overrides.setdefault("llm", {})["model"] = model
     if provider:
         overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
     if debug:
         overrides["debug"] = True
 
@@ -607,6 +623,12 @@ def debug_cmd(
     auto_approve: Annotated[
         bool, typer.Option("--yes", "-y", help="Auto-approve mutating commands")
     ] = False,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
 ) -> None:
     """Analyze an error log, locate relevant code, hypothesize root causes, and propose fixes."""
@@ -615,6 +637,8 @@ def debug_cmd(
         overrides.setdefault("llm", {})["model"] = model
     if provider:
         overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
     if debug:
         overrides["debug"] = True
 
@@ -691,6 +715,12 @@ def analyze_cmd(
     auto_approve: Annotated[
         bool, typer.Option("--yes", "-y", help="Auto-approve mutating commands")
     ] = False,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
 ) -> None:
     """Perform architectural analysis, inspect entry points, and highlight risk areas."""
@@ -699,6 +729,8 @@ def analyze_cmd(
         overrides.setdefault("llm", {})["model"] = model
     if provider:
         overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
     if debug:
         overrides["debug"] = True
 
@@ -763,6 +795,12 @@ def review_cmd(
     provider: Annotated[
         str | None, typer.Option("--provider", help="Override LLM provider")
     ] = None,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
 ) -> None:
     """Perform a diff-aware code review reporting bugs, security, perf, and style findings."""
@@ -771,6 +809,8 @@ def review_cmd(
         overrides.setdefault("llm", {})["model"] = model
     if provider:
         overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
     if debug:
         overrides["debug"] = True
 
@@ -815,6 +855,12 @@ def explain_diff_cmd(
     provider: Annotated[
         str | None, typer.Option("--provider", help="Override LLM provider")
     ] = None,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
 ) -> None:
     """Explain the changes introduced by a git diff and their system impact."""
@@ -823,6 +869,8 @@ def explain_diff_cmd(
         overrides.setdefault("llm", {})["model"] = model
     if provider:
         overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
     if debug:
         overrides["debug"] = True
 
@@ -861,6 +909,12 @@ def commit_msg_cmd(
     provider: Annotated[
         str | None, typer.Option("--provider", help="Override LLM provider")
     ] = None,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Show debug logs")] = False,
 ) -> None:
     """Generate a Conventional Commit message from staged git changes."""
@@ -869,6 +923,8 @@ def commit_msg_cmd(
         overrides.setdefault("llm", {})["model"] = model
     if provider:
         overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
     if debug:
         overrides["debug"] = True
 
@@ -912,6 +968,12 @@ def fix_code(
     ] = False,
     model: Annotated[str | None, typer.Option("--model", help="Model to use")] = None,
     provider: Annotated[str | None, typer.Option("--provider", help="Provider to use")] = None,
+    allow_cloud: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cloud", help="Allow fallback to cloud LLM providers (Gemini, OpenAI)"
+        ),
+    ] = False,
     debug: Annotated[
         bool,
         typer.Option("--debug", "-d", help="Show debug logs and tracebacks"),
@@ -920,6 +982,11 @@ def fix_code(
     """Diagnose and fix code issues using isolated ephemeral sandbox containers."""
     overrides: dict[str, Any] = {}
     if model:
+        overrides.setdefault("llm", {})["model"] = model
+    if provider:
+        overrides.setdefault("llm", {})["provider"] = provider
+    if allow_cloud:
+        overrides.setdefault("llm", {})["allow_cloud_fallback"] = True
         overrides["model"] = model
     if provider:
         overrides["provider"] = provider

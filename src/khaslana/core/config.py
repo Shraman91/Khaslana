@@ -31,6 +31,10 @@ class LLMConfig(BaseModel):
     max_tokens: int = Field(default=4096, description="Max response tokens")
     timeout_seconds: float = Field(default=120.0, description="HTTP request timeout in seconds")
     max_retries: int = Field(default=2, description="Maximum retries for failed requests")
+    allow_cloud_fallback: bool = Field(
+        default=False,
+        description="Allow falling back to cloud LLM providers (Gemini, OpenAI)",
+    )
 
 
 class RetrievalConfig(BaseModel):
@@ -190,6 +194,12 @@ def load_config(
         env_llm["gemini_api_key"] = os.environ["GEMINI_API_KEY"]
     if "GOOGLE_API_KEY" in os.environ:
         env_llm["gemini_api_key"] = os.environ["GOOGLE_API_KEY"]
+    if "KHASLANA_ALLOW_CLOUD" in os.environ:
+        env_llm["allow_cloud_fallback"] = os.environ["KHASLANA_ALLOW_CLOUD"].lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
     if env_llm:
         merged.setdefault("llm", {})
