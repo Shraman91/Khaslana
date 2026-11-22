@@ -9,7 +9,7 @@ Khaslana requires Python 3.11 or higher.
 ### 1. Clone Repository & Create Virtual Environment
 
 ```bash
-git clone https://github.com/shraman-deshpande/khaslana.git
+git clone https://github.com/Shraman91/Khaslana.git
 cd khaslana
 
 # Create and activate virtual environment
