@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import os
+import shlex
 import shutil
+import subprocess
+import sys
 import tempfile
 import time
 from abc import ABC, abstractmethod
@@ -269,3 +273,73 @@ class FakeSandboxRunner(SandboxRunner):
             timed_out=False,
             image_used=image or "python:3.11-slim",
         )
+
+
+class LocalProcessRunner(SandboxRunner):
+    """Local process runner executing tests in an ephemeral workspace copy.
+
+    Used when --no-sandbox is explicitly passed.
+    """
+
+    def __init__(self, default_timeout: int = 30) -> None:
+        self.default_timeout = default_timeout
+
+    def create_temp_workspace(self, source_dir: Path) -> Path:
+        """Create a writable isolated copy of the project directory."""
+        temp_dir = Path(tempfile.mkdtemp(prefix="khaslana_local_ws_"))
+
+        def ignore_patterns(path: str, names: list[str]) -> set[str]:
+            return {".git", "node_modules", "__pycache__", ".venv", "venv", ".khaslana"}
+
+        shutil.copytree(source_dir, temp_dir, dirs_exist_ok=True, ignore=ignore_patterns)
+        return temp_dir
+
+    def run_command(
+        self,
+        cmd: str,
+        workspace_dir: Path,
+        image: str | None = None,
+        timeout: int | None = None,
+        environment: dict[str, str] | None = None,
+    ) -> ExecutionResult:
+        to = timeout or self.default_timeout
+        start = time.time()
+        try:
+            argv = shlex.split(cmd, posix=(sys.platform != "win32"))
+            env = os.environ.copy()
+            if environment:
+                env.update(environment)
+
+            proc = subprocess.run(
+                argv,
+                cwd=str(workspace_dir),
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=to,
+                env=env,
+            )
+            duration = round(time.time() - start, 3)
+            return ExecutionResult(
+                exit_code=proc.returncode,
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                timed_out=False,
+                duration_seconds=duration,
+            )
+        except subprocess.TimeoutExpired:
+            return ExecutionResult(
+                exit_code=-1,
+                stdout="",
+                stderr=f"Command timed out after {to}s",
+                timed_out=True,
+                duration_seconds=round(time.time() - start, 3),
+            )
+        except Exception as e:
+            return ExecutionResult(
+                exit_code=-1,
+                stdout="",
+                stderr=str(e),
+                timed_out=False,
+                duration_seconds=round(time.time() - start, 3),
+            )

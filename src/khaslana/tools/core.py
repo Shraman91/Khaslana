@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -15,26 +18,52 @@ from khaslana.retrieval.indexer import is_binary_file, load_gitignore_spec
 from khaslana.retrieval.pipeline import RetrievalPipeline
 from khaslana.tools.base import Tool, ToolResult
 
-# Default safe inspection commands allowed without confirmation
-DEFAULT_ALLOWLIST = {
-    "git status",
-    "git diff",
-    "git log",
-    "git show",
-    "git branch",
-    "pytest",
-    "python -m pytest",
-    "npm test",
-    "cargo test",
-    "ls",
-    "dir",
-    "cat",
-    "echo",
-    "pwd",
+# Prohibited shell operators and characters
+PROHIBITED_SHELL_CHARS: set[str] = {
+    "|", ";", "&", ">", "<", "$", "`", "\n", "\r"
 }
 
-# Dangerous commands that are strictly prohibited
-DEFAULT_DENYLIST = {
+# Forbidden command wrappers that could execute arbitrary commands
+PROHIBITED_COMMAND_WRAPPERS: set[str] = {
+    "sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh",
+    "cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh", "pwsh.exe",
+    "eval", "exec", "env", "sudo", "doas", "xargs",
+}
+
+# Allowed read-only commands and subcommands represented as prefix tuples
+DEFAULT_READONLY_ALLOWLIST: set[tuple[str, ...]] = {
+    ("git", "status"),
+    ("git", "diff"),
+    ("git", "log"),
+    ("git", "show"),
+    ("git", "branch"),
+    ("git", "rev-parse"),
+    ("git", "describe"),
+    ("git", "tag"),
+    ("git", "remote"),
+    ("pytest",),
+    ("python", "-m", "pytest"),
+    ("python3", "-m", "pytest"),
+    ("npm", "test"),
+    ("npm", "run", "lint"),
+    ("cargo", "test"),
+    ("cargo", "check"),
+    ("go", "test"),
+    ("ls",),
+    ("dir",),
+    ("cat",),
+    ("head",),
+    ("tail",),
+    ("pwd",),
+    ("echo",),
+    ("find",),
+    ("grep",),
+    ("rg",),
+}
+
+DEFAULT_ALLOWLIST = {" ".join(t) for t in DEFAULT_READONLY_ALLOWLIST}
+# Dangerous commands that are strictly prohibited by denylist
+DEFAULT_DENYLIST: set[str] = {
     "rm -rf",
     "format",
     "mkfs",
@@ -94,7 +123,12 @@ class ReadFileTool(Tool):
 
             selected_lines = lines[start - 1 : end]
             numbered = [f"{i}: {line}" for i, line in enumerate(selected_lines, start=start)]
-            output = "\n".join(numbered)
+            body = "\n".join(numbered)
+            output = (
+                f"<<<UNTRUSTED_CONTENT:read_file:{inp.file_path}>>>\n"
+                f"{body}\n"
+                f"<<<END_UNTRUSTED_CONTENT>>>"
+            )
 
             return ToolResult(
                 ok=True,
@@ -161,9 +195,15 @@ class SearchCodeTool(Tool):
                 )
                 formatted.append(snippet)
 
+            results_str = "\n".join(formatted)
+            wrapped = (
+                f"<<<UNTRUSTED_CONTENT:search_code>>>\n"
+                f"{results_str}\n"
+                f"<<<END_UNTRUSTED_CONTENT>>>"
+            )
             return ToolResult(
                 ok=True,
-                output="\n".join(formatted),
+                output=wrapped,
                 metadata={"count": len(results)},
             )
         except Exception as e:
@@ -233,7 +273,7 @@ class RunCommandInput(BaseModel):
 class RunCommandTool(Tool):
     name = "run_command"
     description = (
-        "Run a shell command in the project environment. "
+        "Run a shell-free command in the project environment. "
         "Read-only commands run automatically; mutating commands require confirmation."
     )
     input_schema = RunCommandInput
@@ -241,59 +281,149 @@ class RunCommandTool(Tool):
     def __init__(
         self,
         root_dir: Path | str = ".",
-        allowlist: set[str] | None = None,
+        allowlist: set[tuple[str, ...]] | set[str] | None = None,
         denylist: set[str] | None = None,
-        confirmation_handler: Callable[[str], bool] | None = None,
+        confirmation_handler: Callable[[Any], bool] | None = None,
+        auto_approve: bool = False,
     ) -> None:
         self.root_dir = Path(root_dir).resolve()
-        self.allowlist = allowlist or set(DEFAULT_ALLOWLIST)
-        self.denylist = denylist or set(DEFAULT_DENYLIST)
         self.confirmation_handler = confirmation_handler
+        self.auto_approve = auto_approve
+        self.denylist = denylist or set(DEFAULT_DENYLIST)
 
-    def _is_allowed(self, cmd: str) -> bool:
-        cmd_clean = cmd.strip()
-        for allowed in self.allowlist:
-            if cmd_clean == allowed or cmd_clean.startswith(allowed + " "):
+        if allowlist is None:
+            self.allowlist: set[tuple[str, ...]] = set(DEFAULT_READONLY_ALLOWLIST)
+        else:
+            normalized: set[tuple[str, ...]] = set()
+            for item in allowlist:
+                if isinstance(item, tuple):
+                    normalized.add(item)
+                elif isinstance(item, str):
+                    try:
+                        normalized.add(tuple(shlex.split(item)))
+                    except Exception:
+                        normalized.add((item,))
+            self.allowlist = normalized
+
+    def validate_command(self, raw_cmd: str) -> tuple[bool, list[str], str | None]:
+        """Validate raw command string against shell injection and wrappers."""
+        for char in PROHIBITED_SHELL_CHARS:
+            if char in raw_cmd:
+                return (
+                    False,
+                    [],
+                    f"Shell operator '{char}' is strictly prohibited. Commands must be standalone.",
+                )
+
+        try:
+            argv = shlex.split(raw_cmd, posix=(sys.platform != "win32"))
+        except Exception as e:
+            return False, [], f"Failed to parse command with shlex: {e}"
+
+        if not argv:
+            return False, [], "Empty command string."
+
+        base_bin = Path(argv[0]).name.lower()
+        if (
+            base_bin in PROHIBITED_COMMAND_WRAPPERS
+            or argv[0].lower() in PROHIBITED_COMMAND_WRAPPERS
+        ):
+            return False, argv, f"Command wrapper '{argv[0]}' is strictly prohibited."
+
+        if base_bin == "git":
+            for arg in argv[1:]:
+                if arg == "-c" or arg.startswith("-c="):
+                    return (
+                        False,
+                        argv,
+                        "Git configuration override ('-c') is strictly prohibited.",
+                    )
+                if arg.startswith("--exec-path") or arg.startswith("--config-env"):
+                    return (
+                        False,
+                        argv,
+                        f"Git execution override ('{arg}') is strictly prohibited.",
+                    )
+
+        for denied in self.denylist:
+            if denied in raw_cmd:
+                return (
+                    False,
+                    argv,
+                    f"Command '{raw_cmd}' is blocked by security policy.",
+                )
+
+        return True, argv, None
+
+    def _is_allowed(self, argv: list[str]) -> bool:
+        """Check if parsed argv matches any allowed read-only prefix."""
+        for prefix in self.allowlist:
+            if len(argv) >= len(prefix) and tuple(argv[: len(prefix)]) == prefix:
                 return True
         return False
 
-    def _is_denied(self, cmd: str) -> bool:
-        cmd_clean = cmd.strip()
-        return any(denied in cmd_clean for denied in self.denylist)
-
     def execute(self, input: BaseModel) -> ToolResult:
         inp: RunCommandInput = input  # type: ignore[assignment]
-        cmd = inp.command.strip()
+        raw_cmd = inp.command.strip()
 
-        # Check denylist
-        if self._is_denied(cmd):
+        is_valid, argv, err_msg = self.validate_command(raw_cmd)
+        if not is_valid:
             return ToolResult(
                 ok=False,
                 output="",
-                error=f"Command '{cmd}' is blocked by security policy.",
-                metadata={"denied": True},
+                error=err_msg,
+                metadata={"blocked": True, "reason": "security_policy"},
             )
 
-        # Check allowlist; if not allowlisted, request confirmation
-        if not self._is_allowed(cmd):
-            if self.confirmation_handler is not None:
-                allowed_by_user = self.confirmation_handler(cmd)
-            else:
-                # Default non-interactive policy: mutating commands without handler are blocked
-                allowed_by_user = False
+        if not self._is_allowed(argv):
+            allowed_by_user = False
+            if self.auto_approve:
+                allowed_by_user = True
+            elif self.confirmation_handler is not None:
+                try:
+                    allowed_by_user = bool(self.confirmation_handler(argv))
+                except TypeError:
+                    allowed_by_user = bool(self.confirmation_handler(" ".join(argv)))
+            elif sys.stdin.isatty():
+                import builtins
+
+                ans = (
+                    builtins.input(f"Command {argv} is not on allowlist. Allow? [y/N]: ")
+                    .strip()
+                    .lower()
+                )
+                allowed_by_user = ans in {"y", "yes"}
 
             if not allowed_by_user:
                 return ToolResult(
                     ok=False,
                     output="",
-                    error=f"Execution of mutating command '{cmd}' was denied or unconfirmed.",
-                    metadata={"confirmed": False},
+                    error=(
+                        f"Command {argv} is not on the read-only allowlist "
+                        "and was denied or unconfirmed."
+                    ),
+                    metadata={"confirmed": False, "argv": argv},
                 )
+
+        # Emulate echo safely on all platforms without spawning shell
+        if argv[0].lower() == "echo":
+            out_str = " ".join(argv[1:])
+            wrapped = (
+                f"<<<UNTRUSTED_CONTENT:run_command:echo>>>\n"
+                f"{out_str}\n"
+                f"<<<END_UNTRUSTED_CONTENT>>>"
+            )
+            return ToolResult(
+                ok=True,
+                output=wrapped,
+                error=None,
+                metadata={"returncode": 0, "argv": argv},
+            )
 
         try:
             proc = subprocess.run(
-                cmd,
-                shell=True,
+                argv,
+                shell=False,
                 cwd=str(self.root_dir),
                 capture_output=True,
                 text=True,
@@ -305,11 +435,24 @@ class RunCommandTool(Tool):
             if not combined:
                 combined = f"(Command completed with exit code {proc.returncode} and no output)"
 
+            wrapped_output = (
+                f"<<<UNTRUSTED_CONTENT:run_command:{' '.join(argv)}>>>\n"
+                f"{combined}\n"
+                f"<<<END_UNTRUSTED_CONTENT>>>"
+            )
+
             return ToolResult(
                 ok=(proc.returncode == 0),
-                output=combined,
+                output=wrapped_output,
                 error=err if proc.returncode != 0 else None,
-                metadata={"returncode": proc.returncode},
+                metadata={"returncode": proc.returncode, "argv": argv},
+            )
+        except FileNotFoundError:
+            return ToolResult(
+                ok=False,
+                output="",
+                error=f"Executable not found: '{argv[0]}'.",
+                metadata={"not_found": True},
             )
         except subprocess.TimeoutExpired:
             return ToolResult(

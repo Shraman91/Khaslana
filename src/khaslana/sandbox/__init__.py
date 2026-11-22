@@ -3,6 +3,7 @@
 from khaslana.sandbox.docker_runner import (
     DockerRunner,
     FakeSandboxRunner,
+    LocalProcessRunner,
     SandboxRunner,
     detect_image,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "FakeSandboxRunner",
     "FixAttempt",
     "FixSessionResult",
+    "LocalProcessRunner",
     "SandboxRunner",
     "SelfCorrectingLoop",
     "auto_detect_test_cmd",

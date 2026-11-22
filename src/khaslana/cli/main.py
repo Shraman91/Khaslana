@@ -47,7 +47,7 @@ from khaslana.retrieval.indexer import Indexer
 from khaslana.retrieval.pipeline import RetrievalPipeline
 from khaslana.retrieval.store import ChromaVectorStore, MemoryVectorStore
 from khaslana.retrieval.watcher import IncrementalUpdater
-from khaslana.sandbox.docker_runner import DockerRunner
+from khaslana.sandbox.docker_runner import DockerRunner, LocalProcessRunner, SandboxRunner
 from khaslana.sandbox.fix_loop import SelfCorrectingLoop
 from khaslana.tools.review import (
     CodeReviewer,
@@ -966,6 +966,13 @@ def fix_code(
         bool,
         typer.Option("--yes", "-y", help="Apply fix automatically without confirmation prompt"),
     ] = False,
+    no_sandbox: Annotated[
+        bool,
+        typer.Option(
+            "--no-sandbox",
+            help="Run tests without Docker sandbox (CAUTION: executes test commands on host)",
+        ),
+    ] = False,
     model: Annotated[str | None, typer.Option("--model", help="Model to use")] = None,
     provider: Annotated[str | None, typer.Option("--provider", help="Provider to use")] = None,
     allow_cloud: Annotated[
@@ -1007,7 +1014,28 @@ def fix_code(
         rel_path = Path(target_file.name)
 
     router = LLMRouter(config)
-    runner = DockerRunner()
+    runner: SandboxRunner
+    if no_sandbox:
+        console.print(
+            "[bold yellow]Sandbox Warning:[/bold yellow] Running without Docker sandbox "
+            "(--no-sandbox). Tests will execute in a temporary workspace on your host system."
+        )
+        runner = LocalProcessRunner()
+    else:
+        try:
+            docker_runner = DockerRunner()
+            docker_runner._get_client()
+            runner = docker_runner
+        except Exception as exc:
+            hint = (
+                "Docker is required by default to run 'khaslana fix' safely. "
+                "Ensure Docker is running, or pass '--no-sandbox' to run tests on the host system."
+            )
+            console.print(
+                f"[bold red]Docker Sandbox Unavailable:[/bold red] {exc}\n\n"
+                f"[dim yellow]Hint: {hint}[/dim yellow]"
+            )
+            raise typer.Exit(code=1) from exc
 
     async def _run() -> None:
         try:
