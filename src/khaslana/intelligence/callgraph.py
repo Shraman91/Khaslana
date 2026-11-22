@@ -1,4 +1,9 @@
-"""Static call graph constructor, query engine, cycle detector, and visualizer."""
+"""Static call graph constructor, query engine, cycle detector, and visualizer.
+
+Note: Static call graphs and symbol tables are approximate for dynamic dispatch and
+polymorphic calls. Callees are resolved syntactically by symbol name without full
+type inference or runtime dispatch resolution.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,12 @@ from khaslana.intelligence.symbols import SymbolTable
 
 
 class CallGraph:
-    """Builds and queries static caller/callee graphs using the SymbolTable."""
+    """Builds and queries static caller/callee graphs using the SymbolTable.
+
+    Note: Static call graphs and symbol tables are approximate for dynamic dispatch and
+    polymorphic calls. Callees are resolved syntactically by symbol name without full
+    runtime type inference or dynamic dispatch analysis.
+    """
 
     def __init__(self, symbol_table: SymbolTable) -> None:
         self.symbol_table = symbol_table
